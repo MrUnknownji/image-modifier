@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { ImagePlus, Wand2, Sparkles, Github, Shield, Zap, Image as ImageIcon } from 'lucide-react';
+import { ImagePlus, Sparkles, Github, Shield, Zap, Image as ImageIcon } from 'lucide-react';
+import { Logo, LogoSmall } from '@/components/ui/logo';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -21,6 +22,7 @@ import {
   processImage,
   downloadImage,
 } from '@/lib/image-processing';
+
 import type {
   ProcessedImage,
   ImageSettings,
@@ -151,9 +153,7 @@ export default function Home() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20">
-                <Wand2 className="h-5 w-5 text-primary" />
-              </div>
+              <Logo size={40} />
               <div>
                 <h1 className="text-lg font-semibold tracking-tight">Image Modifier</h1>
                 <p className="text-xs text-muted-foreground">
@@ -307,9 +307,7 @@ export default function Home() {
             {/* Brand */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-                  <Wand2 className="h-4 w-4 text-primary" />
-                </div>
+                <LogoSmall size={32} />
                 <span className="font-semibold">Image Modifier</span>
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed">

@@ -29,6 +29,10 @@ export const metadata: Metadata = {
   title: "Image Modifier - Resize, Convert & Optimize Images",
   description: "A powerful browser-based image processing tool. Resize, convert formats, adjust quality, and modify metadata - all locally without uploading to any server.",
   keywords: ["image resizer", "image converter", "image optimizer", "batch processing", "EXIF editor", "photo editor"],
+  icons: {
+    icon: "/favicon.svg",
+    apple: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
