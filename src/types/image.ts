@@ -40,6 +40,16 @@ export interface ProcessedImage {
   settings: ImageSettings;
 }
 
+export interface ImageFilters {
+  brightness: number;
+  contrast: number;
+  saturation: number;
+  grayscale: number;
+  sepia: number;
+  blur: number;
+  hueRotate: number;
+}
+
 export interface ImageSettings {
   width: number;
   height: number;
@@ -48,6 +58,7 @@ export interface ImageSettings {
   format: 'jpeg' | 'png' | 'webp';
   dpi: number;
   preserveMetadata: boolean;
+  filters: ImageFilters;
 }
 
 export interface AspectRatio {

@@ -121,6 +121,10 @@ export async function processImage(
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
 
+      // Apply filters
+      const { brightness, contrast, saturation, grayscale, sepia, blur, hueRotate } = settings.filters;
+      ctx.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%) grayscale(${grayscale}%) sepia(${sepia}%) blur(${blur}px) hue-rotate(${hueRotate}deg)`;
+
       if (aspectRatio !== null && settings.maintainAspectRatio) {
         const originalRatio = originalDimensions.width / originalDimensions.height;
         const targetRatio = targetDimensions.width / targetDimensions.height;
@@ -200,6 +204,15 @@ export async function createProcessedImage(file: File): Promise<ProcessedImage> 
       format: 'jpeg',
       dpi: 72,
       preserveMetadata: true,
+      filters: {
+        brightness: 100,
+        contrast: 100,
+        saturation: 100,
+        grayscale: 0,
+        sepia: 0,
+        blur: 0,
+        hueRotate: 0,
+      },
     },
   };
 }

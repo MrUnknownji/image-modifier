@@ -10,6 +10,8 @@ import {
   Monitor,
   Crop,
   Image as ImageIcon,
+  Sparkles,
+  RotateCcw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,6 +39,7 @@ import {
   COMMON_RESOLUTIONS,
   type ProcessedImage,
   type ImageSettings,
+  type ImageFilters,
 } from '@/types/image';
 
 interface ImageSettingsPanelProps {
@@ -61,6 +64,15 @@ export function ImageSettingsPanel({
       format: 'jpeg',
       dpi: 72,
       preserveMetadata: true,
+      filters: {
+        brightness: 100,
+        contrast: 100,
+        saturation: 100,
+        grayscale: 0,
+        sepia: 0,
+        blur: 0,
+        hueRotate: 0,
+      },
     }
   );
   const [aspectRatio, setAspectRatio] = useState<number | null>(null);
@@ -123,6 +135,30 @@ export function ImageSettingsPanel({
     }
   };
 
+  const handleFilterChange = (key: keyof ImageFilters, value: number) => {
+    if (!settings.filters) return;
+    updateSettings({
+      filters: {
+        ...settings.filters,
+        [key]: value,
+      },
+    });
+  };
+
+  const resetFilters = () => {
+    updateSettings({
+      filters: {
+        brightness: 100,
+        contrast: 100,
+        saturation: 100,
+        grayscale: 0,
+        sepia: 0,
+        blur: 0,
+        hueRotate: 0,
+      },
+    });
+  };
+
   const resetToOriginal = () => {
     if (image) {
       updateSettings({
@@ -146,8 +182,8 @@ export function ImageSettingsPanel({
 
   return (
     <TooltipProvider>
-      <Card className="h-full">
-        <CardHeader className="pb-3">
+      <Card className="h-full flex flex-col">
+        <CardHeader className="pb-3 flex-none">
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg flex items-center gap-2">
               <Settings2 className="h-5 w-5" />
@@ -160,19 +196,23 @@ export function ImageSettingsPanel({
             )}
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex-1 overflow-y-auto">
           <Tabs defaultValue="dimensions" className="space-y-4">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="dimensions" className="flex items-center gap-1">
-                <Crop className="h-4 w-4" />
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="dimensions" className="px-2">
+                <Crop className="h-4 w-4 sm:mr-1" />
                 <span className="hidden sm:inline">Size</span>
               </TabsTrigger>
-              <TabsTrigger value="quality" className="flex items-center gap-1">
-                <Monitor className="h-4 w-4" />
+              <TabsTrigger value="filters" className="px-2">
+                <Sparkles className="h-4 w-4 sm:mr-1" />
+                <span className="hidden sm:inline">Filters</span>
+              </TabsTrigger>
+              <TabsTrigger value="quality" className="px-2">
+                <Monitor className="h-4 w-4 sm:mr-1" />
                 <span className="hidden sm:inline">Quality</span>
               </TabsTrigger>
-              <TabsTrigger value="metadata" className="flex items-center gap-1">
-                <FileImage className="h-4 w-4" />
+              <TabsTrigger value="metadata" className="px-2">
+                <FileImage className="h-4 w-4 sm:mr-1" />
                 <span className="hidden sm:inline">Meta</span>
               </TabsTrigger>
             </TabsList>
@@ -300,6 +340,115 @@ export function ImageSettingsPanel({
                 <Badge variant="secondary" className="text-xs">
                   Original: {image.dimensions.width} × {image.dimensions.height}
                 </Badge>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="filters" className="space-y-6">
+              <div className="flex justify-end">
+                <Button variant="ghost" size="sm" onClick={resetFilters} className="h-8">
+                  <RotateCcw className="h-3 w-3 mr-1" />
+                  Reset Filters
+                </Button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label>Brightness</Label>
+                    <span className="text-xs text-muted-foreground">{settings.filters?.brightness}%</span>
+                  </div>
+                  <Slider
+                    value={[settings.filters?.brightness || 100]}
+                    onValueChange={([val]) => handleFilterChange('brightness', val)}
+                    min={0}
+                    max={200}
+                    step={1}
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label>Contrast</Label>
+                    <span className="text-xs text-muted-foreground">{settings.filters?.contrast}%</span>
+                  </div>
+                  <Slider
+                    value={[settings.filters?.contrast || 100]}
+                    onValueChange={([val]) => handleFilterChange('contrast', val)}
+                    min={0}
+                    max={200}
+                    step={1}
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label>Saturation</Label>
+                    <span className="text-xs text-muted-foreground">{settings.filters?.saturation}%</span>
+                  </div>
+                  <Slider
+                    value={[settings.filters?.saturation || 100]}
+                    onValueChange={([val]) => handleFilterChange('saturation', val)}
+                    min={0}
+                    max={200}
+                    step={1}
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label>Grayscale</Label>
+                    <span className="text-xs text-muted-foreground">{settings.filters?.grayscale}%</span>
+                  </div>
+                  <Slider
+                    value={[settings.filters?.grayscale || 0]}
+                    onValueChange={([val]) => handleFilterChange('grayscale', val)}
+                    min={0}
+                    max={100}
+                    step={1}
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label>Sepia</Label>
+                    <span className="text-xs text-muted-foreground">{settings.filters?.sepia}%</span>
+                  </div>
+                  <Slider
+                    value={[settings.filters?.sepia || 0]}
+                    onValueChange={([val]) => handleFilterChange('sepia', val)}
+                    min={0}
+                    max={100}
+                    step={1}
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label>Blur</Label>
+                    <span className="text-xs text-muted-foreground">{settings.filters?.blur}px</span>
+                  </div>
+                  <Slider
+                    value={[settings.filters?.blur || 0]}
+                    onValueChange={([val]) => handleFilterChange('blur', val)}
+                    min={0}
+                    max={20}
+                    step={1}
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label>Hue Rotate</Label>
+                    <span className="text-xs text-muted-foreground">{settings.filters?.hueRotate}°</span>
+                  </div>
+                  <Slider
+                    value={[settings.filters?.hueRotate || 0]}
+                    onValueChange={([val]) => handleFilterChange('hueRotate', val)}
+                    min={0}
+                    max={360}
+                    step={1}
+                  />
+                </div>
               </div>
             </TabsContent>
 
