@@ -189,7 +189,7 @@ export default function Home() {
           </TabsList>
 
           <TabsContent value="modify" className="space-y-6">
-            <div className="grid lg:grid-cols-[300px_1fr] gap-4 lg:gap-8">
+            <div className="grid lg:grid-cols-[350px_1fr] gap-6">
               {/* Left Sidebar */}
               <div className="space-y-6">
                 <Card>

@@ -88,8 +88,8 @@ export function ImageUploader({
                 key={image.id}
                 className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all ${
                   selectedId === image.id
-                    ? 'bg-secondary/20 border-2 border-primary shadow-sm'
-                    : 'hover:bg-muted border-2 border-transparent'
+                    ? 'bg-accent border-primary/50 border shadow-sm'
+                    : 'hover:bg-muted border border-transparent'
                 }`}
                 onClick={() => onImageSelect(image.id)}
               >
