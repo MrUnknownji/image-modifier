@@ -86,10 +86,10 @@ export function ImageUploader({
             {images.map((image) => (
               <div
                 key={image.id}
-                className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
+                className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all ${
                   selectedId === image.id
-                    ? 'bg-primary/10 border border-primary/30'
-                    : 'hover:bg-muted border border-transparent'
+                    ? 'bg-secondary/20 border-2 border-primary shadow-sm'
+                    : 'hover:bg-muted border-2 border-transparent'
                 }`}
                 onClick={() => onImageSelect(image.id)}
               >

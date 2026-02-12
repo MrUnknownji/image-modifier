@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Lock,
   Unlock,
@@ -77,17 +77,32 @@ export function ImageSettingsPanel({
   );
   const [aspectRatio, setAspectRatio] = useState<number | null>(null);
   const [lockRatio, setLockRatio] = useState(true);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (image) {
       setSettings(image.settings);
     }
+    // Clear any pending debounced updates when image changes
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
   }, [image?.id]);
 
   const updateSettings = (updates: Partial<ImageSettings>) => {
     const newSettings = { ...settings, ...updates };
     setSettings(newSettings);
-    onSettingsChange(newSettings);
+    
+    // Debounce the parent update to prevent excessive processing
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    
+    timeoutRef.current = setTimeout(() => {
+      onSettingsChange(newSettings);
+    }, 500);
   };
 
   const handleWidthChange = (value: string) => {
