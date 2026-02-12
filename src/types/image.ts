@@ -1,0 +1,82 @@
+export interface ImageDimensions {
+  width: number;
+  height: number;
+}
+
+export interface ImageMetadata {
+  name: string;
+  type: string;
+  size: number;
+  lastModified: number;
+}
+
+export interface EXIFData {
+  Make?: string;
+  Model?: string;
+  DateTimeOriginal?: string;
+  ExposureTime?: number;
+  FNumber?: number;
+  ISOSpeedRatings?: number;
+  FocalLength?: number;
+  GPSLatitude?: number[];
+  GPSLongitude?: number[];
+  ImageWidth?: number;
+  ImageHeight?: number;
+  Orientation?: number;
+  Software?: string;
+  Copyright?: string;
+  Artist?: string;
+  [key: string]: unknown;
+}
+
+export interface ProcessedImage {
+  id: string;
+  originalFile: File;
+  originalUrl: string;
+  processedUrl: string | null;
+  metadata: ImageMetadata;
+  dimensions: ImageDimensions;
+  exif: EXIFData | null;
+  settings: ImageSettings;
+}
+
+export interface ImageSettings {
+  width: number;
+  height: number;
+  maintainAspectRatio: boolean;
+  quality: number;
+  format: 'jpeg' | 'png' | 'webp';
+  dpi: number;
+  preserveMetadata: boolean;
+}
+
+export interface AspectRatio {
+  name: string;
+  value: number | null;
+  dimensions?: { width: number; height: number };
+}
+
+export const COMMON_ASPECT_RATIOS: AspectRatio[] = [
+  { name: 'Original', value: null },
+  { name: '1:1 (Square)', value: 1 },
+  { name: '4:3 (Standard)', value: 4 / 3 },
+  { name: '16:9 (Widescreen)', value: 16 / 9 },
+  { name: '3:2 (Photo)', value: 3 / 2 },
+  { name: '21:9 (Ultrawide)', value: 21 / 9 },
+  { name: '9:16 (Portrait)', value: 9 / 16 },
+  { name: '5:4 (Large Format)', value: 5 / 4 },
+];
+
+export const COMMON_RESOLUTIONS = [
+  { name: 'Original', width: 0, height: 0 },
+  { name: 'HD (1280×720)', width: 1280, height: 720 },
+  { name: 'Full HD (1920×1080)', width: 1920, height: 1080 },
+  { name: '2K (2560×1440)', width: 2560, height: 1440 },
+  { name: '4K (3840×2160)', width: 3840, height: 2160 },
+  { name: '8K (7680×4320)', width: 7680, height: 4320 },
+  { name: 'Instagram Post (1080×1080)', width: 1080, height: 1080 },
+  { name: 'Instagram Story (1080×1920)', width: 1080, height: 1920 },
+  { name: 'Facebook Cover (820×312)', width: 820, height: 312 },
+  { name: 'Twitter Header (1500×500)', width: 1500, height: 500 },
+  { name: 'YouTube Thumbnail (1280×720)', width: 1280, height: 720 },
+];
