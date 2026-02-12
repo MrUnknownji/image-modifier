@@ -9,6 +9,8 @@ import {
   AlertCircle,
   Loader2,
   Trash2,
+  Images,
+  Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,11 +22,11 @@ import {
 } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import {
   Alert,
   AlertDescription,
+  AlertTitle,
 } from '@/components/ui/alert';
 import type { ProcessedImage, ImageSettings } from '@/types/image';
 import { processImage, formatFileSize } from '@/lib/image-processing';
@@ -64,7 +66,7 @@ export function BatchProcessor({
     });
     setErrors([]);
 
-    const zip = new (JSZip as any)();
+    const zip = new JSZip();
     const processedImages: { name: string; blob: Blob }[] = [];
     const newErrors: string[] = [];
 
@@ -92,7 +94,7 @@ export function BatchProcessor({
           ...prev!,
           completed: prev!.completed + 1,
         }));
-      } catch (error) {
+      } catch {
         newErrors.push(`Failed to process ${image.metadata.name}`);
         setProgress((prev) => ({
           ...prev!,
@@ -125,66 +127,87 @@ export function BatchProcessor({
   }
 
   const totalSize = images.reduce((acc, img) => acc + img.metadata.size, 0);
+  const progressPercent = progress ? (progress.completed / progress.total) * 100 : 0;
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
+    <Card className="border-border/60">
+      <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Package className="h-5 w-5" />
+          <div className="space-y-1">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Package className="h-4 w-4 text-primary" />
               Batch Processing
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-xs">
               Process all {images.length} images with current settings
             </CardDescription>
           </div>
-          <Badge variant="secondary">
-            {formatFileSize(totalSize)} total
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="font-normal text-xs">
+              <Images className="h-3 w-3 mr-1" />
+              {images.length}
+            </Badge>
+            <Badge variant="outline" className="font-normal text-xs">
+              {formatFileSize(totalSize)}
+            </Badge>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Progress */}
         {progress && (
-          <div className="space-y-2">
+          <div className="space-y-3 p-3 bg-muted/30 rounded-lg border border-border/60">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground truncate max-w-[200px]">
-                Processing: {progress.currentFile}
-              </span>
-              <span className="font-medium">
+              <div className="flex items-center gap-2 min-w-0">
+                <Loader2 className="h-4 w-4 animate-spin text-primary flex-shrink-0" />
+                <span className="text-muted-foreground truncate">
+                  {progress.currentFile}
+                </span>
+              </div>
+              <span className="font-medium text-xs tabular-nums flex-shrink-0">
                 {progress.completed} / {progress.total}
               </span>
             </div>
-            <Progress
-              value={(progress.completed / progress.total) * 100}
-              className="h-2"
-            />
+            <Progress value={progressPercent} className="h-1.5" />
+            <p className="text-[10px] text-muted-foreground">
+              Processing images... Please don&apos;t close this tab
+            </p>
           </div>
         )}
 
+        {/* Errors */}
         {errors.length > 0 && (
-          <Alert variant="destructive">
+          <Alert variant="destructive" className="border-destructive/50">
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              {errors.length} image(s) failed to process
+            <AlertTitle className="text-xs font-medium">Processing Errors</AlertTitle>
+            <AlertDescription className="text-xs">
+              {errors.length} image{errors.length !== 1 ? 's' : ''} failed to process
             </AlertDescription>
           </Alert>
         )}
 
+        {/* Success */}
         {processedCount > 0 && !progress && (
-          <Alert className="bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800">
+          <Alert className="border-green-500/30 bg-green-500/10">
             <CheckCircle2 className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-800 dark:text-green-200">
-              {processedCount} image(s) processed successfully
+            <AlertTitle className="text-xs font-medium text-green-700 dark:text-green-400">
+              Processing Complete
+            </AlertTitle>
+            <AlertDescription className="text-xs text-green-600 dark:text-green-400">
+              {processedCount} image{processedCount !== 1 ? 's' : ''} processed successfully
             </AlertDescription>
           </Alert>
         )}
 
+        <Separator />
+
+        {/* Actions */}
         <div className="flex gap-2">
           <Button
             onClick={processAllImages}
             disabled={!!progress}
             className="flex-1 gap-2"
+            size="sm"
           >
             {progress ? (
               <>
@@ -205,10 +228,21 @@ export function BatchProcessor({
           </Button>
           
           {(processedCount > 0 || errors.length > 0) && !progress && (
-            <Button variant="outline" size="icon" onClick={clearCompleted}>
+            <Button 
+              variant="outline" 
+              size="icon" 
+              onClick={clearCompleted}
+              className="h-9 w-9"
+            >
               <Trash2 className="h-4 w-4" />
             </Button>
           )}
+        </div>
+
+        {/* Info */}
+        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+          <Zap className="h-3 w-3" />
+          <span>Settings will be applied to all {images.length} images</span>
         </div>
       </CardContent>
     </Card>

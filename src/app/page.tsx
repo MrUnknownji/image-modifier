@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { ImagePlus, Wand2, Settings, Sparkles } from 'lucide-react';
+import { ImagePlus, Wand2, Sparkles, Github, Shield, Zap, Image as ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -31,7 +31,7 @@ export default function Home() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [processedBlob, setProcessedBlob] = useState<Blob | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [aspectRatio, setAspectRatio] = useState<number | null>(null);
+  const [aspectRatio] = useState<number | null>(null);
 
   const selectedImage = images.find((img) => img.id === selectedId) || null;
 
@@ -141,33 +141,34 @@ export default function Home() {
     };
 
     processSelected();
-  }, [selectedImage?.id, aspectRatio]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedImage?.id, aspectRatio, selectedImage]);
 
   return (
-    <main className="min-h-screen bg-background">
+    <div className="min-h-screen flex flex-col bg-background">
       {/* Header */}
-      <header className="border-b border-border bg-card">
+      <header className="sticky top-0 z-50 border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <Wand2 className="h-6 w-6 text-primary" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20">
+                <Wand2 className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <h1 className="text-xl font-bold">Image Modifier</h1>
+                <h1 className="text-lg font-semibold tracking-tight">Image Modifier</h1>
                 <p className="text-xs text-muted-foreground">
                   Resize, convert, and optimize your images
                 </p>
               </div>
             </div>
-            <div className="hidden sm:flex items-center gap-2">
-              <Button variant="ghost" size="sm">
-                <Sparkles className="h-4 w-4 mr-1" />
+            <div className="hidden sm:flex items-center gap-1">
+              <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground">
+                <Zap className="h-4 w-4" />
                 Features
               </Button>
-              <Button variant="ghost" size="sm">
-                <Settings className="h-4 w-4 mr-1" />
-                Settings
+              <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground">
+                <Shield className="h-4 w-4" />
+                Privacy
               </Button>
             </div>
           </div>
@@ -175,31 +176,36 @@ export default function Home() {
       </header>
 
       {/* Main Content */}
-      <div className="container mx-auto px-4 py-6">
+      <main className="flex-1 container mx-auto px-4 py-8">
         <Tabs defaultValue="modify" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 max-w-md">
-            <TabsTrigger value="modify" className="gap-2">
-              <ImagePlus className="h-4 w-4" />
-              Modify Images
-            </TabsTrigger>
-            <TabsTrigger value="batch" className="gap-2">
-              <Sparkles className="h-4 w-4" />
-              Batch Process
-            </TabsTrigger>
-          </TabsList>
+          <div className="flex justify-center">
+            <TabsList className="grid w-full max-w-md grid-cols-2">
+              <TabsTrigger value="modify" className="gap-2">
+                <ImagePlus className="h-4 w-4" />
+                Modify Images
+              </TabsTrigger>
+              <TabsTrigger value="batch" className="gap-2">
+                <Sparkles className="h-4 w-4" />
+                Batch Process
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="modify" className="space-y-6">
-            <div className="grid lg:grid-cols-[350px_1fr] gap-6">
+            <div className="grid lg:grid-cols-[minmax(0,380px)_1fr] gap-6">
               {/* Left Sidebar */}
-              <div className="space-y-6">
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-lg">Images</CardTitle>
+              <div className="space-y-6 min-w-0 w-full">
+                <Card className="overflow-hidden min-w-0">
+                  <CardHeader className="pb-4">
+                    <CardTitle className="text-base font-semibold flex items-center gap-2">
+                      <ImageIcon className="h-4 w-4 text-primary" />
+                      Images
+                    </CardTitle>
                     <CardDescription>
                       Upload and manage your images
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="min-w-0 w-full">
                     <ImageUploader
                       images={images}
                       onImagesAdd={handleImagesAdd}
@@ -230,11 +236,11 @@ export default function Home() {
             </div>
           </TabsContent>
 
-          <TabsContent value="batch" className="max-w-4xl mx-auto">
+          <TabsContent value="batch" className="max-w-5xl mx-auto">
             <div className="grid md:grid-cols-2 gap-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Batch Processing</CardTitle>
+                  <CardTitle className="text-base font-semibold">Batch Processing</CardTitle>
                   <CardDescription>
                     Process multiple images at once with the same settings
                   </CardDescription>
@@ -292,17 +298,78 @@ export default function Home() {
             </div>
           </TabsContent>
         </Tabs>
-      </div>
+      </main>
 
       {/* Footer */}
-      <footer className="border-t border-border mt-12">
-        <div className="container mx-auto px-4 py-6">
+      <footer className="border-t border-border/40 bg-muted/30">
+        <div className="container mx-auto px-4 py-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* Brand */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                  <Wand2 className="h-4 w-4 text-primary" />
+                </div>
+                <span className="font-semibold">Image Modifier</span>
+              </div>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                A powerful browser-based image processing tool. Resize, convert formats, 
+                adjust quality, and modify metadata — all locally without uploading to any server.
+              </p>
+            </div>
+
+            {/* Features */}
+            <div className="space-y-3">
+              <h3 className="font-semibold text-sm">Features</h3>
+              <ul className="space-y-2">
+                <li className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Zap className="h-3.5 w-3.5 text-primary" />
+                  Fast client-side processing
+                </li>
+                <li className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Shield className="h-3.5 w-3.5 text-primary" />
+                  100% private — images never leave your device
+                </li>
+                <li className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <ImageIcon className="h-3.5 w-3.5 text-primary" />
+                  Supports JPG, PNG, WebP, GIF, BMP, TIFF
+                </li>
+                <li className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Sparkles className="h-3.5 w-3.5 text-primary" />
+                  Batch processing with ZIP download
+                </li>
+              </ul>
+            </div>
+
+            {/* Privacy & Links */}
+            <div className="space-y-3">
+              <h3 className="font-semibold text-sm">Privacy & Security</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                All image processing happens directly in your browser. 
+                No data is ever uploaded to any server, ensuring complete privacy.
+              </p>
+              <div className="flex items-center gap-2 pt-2">
+                <Button variant="outline" size="sm" className="gap-2" asChild>
+                  <a href="https://github.com/MrUnknownji/image-modifier" target="_blank" rel="noopener noreferrer">
+                    <Github className="h-4 w-4" />
+                    GitHub
+                  </a>
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <Separator className="my-6" />
+
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
-            <p>Image Modifier - Process images locally in your browser</p>
-            <p>Your images never leave your device</p>
+            <p>© {new Date().getFullYear()} Image Modifier. Open source project.</p>
+            <div className="flex items-center gap-1.5">
+              <Shield className="h-3.5 w-3.5" />
+              <span>Your images never leave your device</span>
+            </div>
           </div>
         </div>
       </footer>
-    </main>
+    </div>
   );
 }

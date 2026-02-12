@@ -55,10 +55,11 @@ export function calculateDimensions(
   settings: ImageSettings,
   aspectRatio: number | null
 ): ImageDimensions {
-  let { width, height, maintainAspectRatio } = settings;
+  let { width, height } = settings;
+  const { maintainAspectRatio } = settings;
 
   if (aspectRatio !== null && maintainAspectRatio) {
-    const originalRatio = originalWidth / originalHeight;
+
     
     if (width && !height) {
       height = Math.round(width / aspectRatio);
