@@ -83,7 +83,9 @@ export function BatchProcessor({
           aspectRatio
         );
         const extension = globalSettings.format;
-        const baseName = image.metadata.name.replace(/\.[^/.]+$/, '');
+        // Sanitize the filename to prevent path traversal
+        const sanitizedName = image.metadata.name.split('/').pop()?.split('\\').pop() || image.metadata.name;
+        const baseName = sanitizedName.replace(/\.[^/.]+$/, '');
         const newName = `${baseName}_processed.${extension}`;
         
         processedImages.push({ name: newName, blob });
