@@ -322,28 +322,56 @@ function ImageModifierApp() {
 
   // Prevent page scroll when scrolling on number inputs
   useEffect(() => {
-    const handleWheel = (e: WheelEvent) => {
+    let focusedInput: HTMLInputElement | null = null;
+
+    const handleFocus = (e: FocusEvent) => {
       const target = e.target as HTMLElement;
       if (target.tagName === 'INPUT' && target.getAttribute('type') === 'number') {
-        // Allow the input value to change but prevent page scroll
+        focusedInput = target as HTMLInputElement;
+      }
+    };
+
+    const handleBlur = (e: FocusEvent) => {
+      const target = e.target as HTMLElement;
+      if (target === focusedInput) {
+        focusedInput = null;
+      }
+    };
+
+    const handleWheel = (e: WheelEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' && target.getAttribute('type') === 'number' && target === focusedInput) {
         e.preventDefault();
-        // Manually trigger the scroll behavior on the input
+        
         const input = target as HTMLInputElement;
         const step = parseFloat(input.step) || 1;
         const currentValue = parseFloat(input.value) || 0;
         const delta = e.deltaY > 0 ? -step : step;
-        const min = parseFloat(input.min) || -Infinity;
-        const max = parseFloat(input.max) || Infinity;
-        const newValue = Math.max(min, Math.min(max, currentValue + delta));
-        input.value = newValue.toString();
-        input.dispatchEvent(new Event('change', { bubbles: true }));
+        const min = parseFloat(input.min);
+        const max = parseFloat(input.max);
+        const hasMin = !isNaN(min);
+        const hasMax = !isNaN(max);
+        let newValue = currentValue + delta;
+        if (hasMin) newValue = Math.max(min, newValue);
+        if (hasMax) newValue = Math.min(max, newValue);
+        
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set;
+        nativeInputValueSetter!.call(input, newValue.toString());
+        
+        const inputEvent = new Event('input', { bubbles: true, cancelable: true });
+        const changeEvent = new Event('change', { bubbles: true, cancelable: true });
+        input.dispatchEvent(inputEvent);
+        input.dispatchEvent(changeEvent);
       }
     };
 
-    // Use capture phase to intercept before it bubbles
+    document.addEventListener('focus', handleFocus, true);
+    document.addEventListener('blur', handleBlur, true);
     document.addEventListener('wheel', handleWheel, { passive: false });
     
     return () => {
+      document.removeEventListener('focus', handleFocus, true);
+      document.removeEventListener('blur', handleBlur, true);
       document.removeEventListener('wheel', handleWheel);
     };
   }, []);
@@ -352,9 +380,9 @@ function ImageModifierApp() {
     <div className="min-h-screen flex flex-col bg-background">
       <Toaster position="bottom-right" richColors closeButton />
       
-      <header className="sticky top-0 z-50 border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
+      <header className="sticky top-0 z-50 border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 w-full">
+        <div className="px-4 py-4 w-full max-w-[100vw] box-border">
+          <div className="flex items-center justify-between w-full">
             <div className="flex items-center gap-3">
               <Logo size={40} />
               <div>
@@ -390,10 +418,10 @@ function ImageModifierApp() {
         </div>
       </header>
 
-      <main className="flex-1 container mx-auto px-4 py-8 overflow-hidden w-full max-w-[100vw]">
-        <Tabs defaultValue="modify" className="space-y-6">
-          <div className="flex justify-center">
-            <TabsList className="grid w-full max-w-md grid-cols-2">
+      <main className="flex-1 px-4 py-6 w-full max-w-[100vw] box-border overflow-x-hidden">
+        <Tabs defaultValue="modify" className="space-y-4 w-full max-w-full">
+          <div className="flex justify-center w-full px-0">
+            <TabsList className="grid w-full grid-cols-2 max-w-full">
               <TabsTrigger value="modify" className="gap-2">
                 <ImagePlus className="h-4 w-4" />
                 Modify Images
@@ -405,11 +433,11 @@ function ImageModifierApp() {
             </TabsList>
           </div>
 
-          <TabsContent value="modify" className="space-y-6 overflow-hidden">
-            <div className="grid lg:grid-cols-[minmax(0,380px)_1fr] gap-6 max-w-full">
-              <div className="space-y-6 min-w-0 w-full max-w-full">
-                <Card className="overflow-hidden min-w-0">
-                  <CardHeader className="pb-4">
+          <TabsContent value="modify" className="space-y-4 w-full max-w-full px-0">
+            <div className="flex flex-col lg:grid lg:grid-cols-[380px_1fr] gap-4 lg:gap-6 w-full max-w-full">
+              <div className="space-y-4 w-full max-w-full">
+                <Card className="overflow-hidden w-full max-w-full">
+                  <CardHeader className="pb-4 px-4">
                     <CardTitle className="text-base font-semibold flex items-center gap-2">
                       <ImageIcon className="h-4 w-4 text-primary" />
                       Images
@@ -418,7 +446,7 @@ function ImageModifierApp() {
                       Upload and manage your images
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="min-w-0">
+                  <CardContent className="px-4">
                     <ImageUploader
                       images={images}
                       onImagesAdd={handleImagesAdd}
@@ -437,7 +465,7 @@ function ImageModifierApp() {
                 />
               </div>
 
-              <div className="space-y-6">
+              <div className="space-y-4 w-full">
                 <ImagePreview
                   image={selectedImage}
                   processedBlob={processedBlob}
@@ -448,16 +476,16 @@ function ImageModifierApp() {
             </div>
           </TabsContent>
 
-          <TabsContent value="batch" className="max-w-5xl mx-auto">
-            <div className="grid md:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
+          <TabsContent value="batch" className="w-full max-w-full px-0">
+            <div className="flex flex-col md:grid md:grid-cols-2 gap-4 w-full max-w-full">
+              <Card className="w-full max-w-full">
+                <CardHeader className="px-4">
                   <CardTitle className="text-base font-semibold">Batch Processing</CardTitle>
                   <CardDescription>
                     Process multiple images at once with the same settings
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 px-4">
                   <ImageUploader
                     images={images}
                     onImagesAdd={handleImagesAdd}
@@ -468,7 +496,7 @@ function ImageModifierApp() {
                 </CardContent>
               </Card>
 
-              <div className="space-y-6">
+              <div className="space-y-4 w-full max-w-full">
                 {selectedImage && (
                   <ImageSettingsPanel
                     image={selectedImage}
@@ -509,9 +537,9 @@ function ImageModifierApp() {
         </Tabs>
       </main>
 
-      <footer className="border-t border-border/40 bg-muted/30">
-        <div className="container mx-auto px-4 py-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <footer className="border-t border-border/40 bg-muted/30 w-full max-w-full">
+        <div className="px-4 py-6 w-full max-w-full">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-full">
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <LogoSmall size={32} />

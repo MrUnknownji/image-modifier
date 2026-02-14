@@ -111,33 +111,28 @@ function FilterSlider({ label, value, defaultValue, min, max, step = 1, unit = '
   const isModified = value !== defaultValue;
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <Label className="text-xs">{label}</Label>
-        <div className="flex items-center gap-1.5">
+    <div className="space-y-1.5 w-full max-w-full">
+      <div className="flex items-center justify-between w-full gap-1">
+        <Label className="text-[11px] flex-shrink-0">{label}</Label>
+        <div className="flex items-center gap-1 flex-shrink-0">
           <Input
             type="number"
             value={value}
             onChange={(e) => handleInputChange(e.target.value)}
-            className="h-6 w-14 text-xs text-right px-1.5"
+            className="h-6 w-12 text-xs text-right px-1"
             min={min}
             max={max}
           />
-          <span className="text-xs text-muted-foreground w-4">{unit}</span>
+          <span className="text-[10px] text-muted-foreground w-3">{unit}</span>
           {isModified && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={onReset}
-                  className="h-5 w-5 p-0 hover:bg-muted"
-                >
-                  <RotateCcw className="h-3 w-3 text-muted-foreground hover:text-foreground" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Reset to default</TooltipContent>
-            </Tooltip>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onReset}
+              className="h-5 w-5 p-0 hover:bg-muted"
+            >
+              <RotateCcw className="h-2.5 w-2.5 text-muted-foreground" />
+            </Button>
           )}
         </div>
       </div>
@@ -299,10 +294,10 @@ export function ImageSettingsPanel({
 
   if (!image) {
     return (
-      <Card className="border-border/60">
-        <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted mb-4">
-            <ImageIcon className="h-6 w-6 text-muted-foreground/50" />
+      <Card className="border-border/60 w-full max-w-full">
+        <CardContent className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted mb-3">
+            <ImageIcon className="h-5 w-5 text-muted-foreground/50" />
           </div>
           <p className="text-sm font-medium">Select an image to edit</p>
           <p className="text-xs text-muted-foreground mt-1">Upload images to get started</p>
@@ -312,9 +307,9 @@ export function ImageSettingsPanel({
   }
 
   return (
-    <Card className="border-border/60 min-w-0">
-      <CardHeader className="pb-4">
-        <div className="flex items-center justify-between">
+    <Card className="border-border/60 w-full max-w-full overflow-hidden">
+      <CardHeader className="pb-3 px-4">
+        <div className="flex items-center justify-between w-full">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
             <Settings2 className="h-4 w-4 text-primary" />
             Image Settings
@@ -322,8 +317,8 @@ export function ImageSettingsPanel({
           {hasMultipleImages && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="outline" size="sm" onClick={onApplyToAll} className="h-8 gap-1.5">
-                  <Copy className="h-3.5 w-3.5" />
+                <Button variant="outline" size="sm" onClick={onApplyToAll} className="h-7 gap-1 text-xs">
+                  <Copy className="h-3 w-3" />
                   Apply to All
                 </Button>
               </TooltipTrigger>
@@ -332,32 +327,32 @@ export function ImageSettingsPanel({
           )}
         </div>
       </CardHeader>
-      <CardContent className="pt-0 min-w-0">
-        <Tabs defaultValue="dimensions" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4 h-9">
-            <TabsTrigger value="dimensions" className="text-xs gap-1.5">
-              <Crop className="h-3.5 w-3.5" />
+      <CardContent className="pt-0 px-4 w-full max-w-full">
+        <Tabs defaultValue="dimensions" className="space-y-3 w-full max-w-full">
+          <TabsList className="grid w-full grid-cols-4 h-8">
+            <TabsTrigger value="dimensions" className="text-xs gap-1">
+              <Crop className="h-3 w-3" />
               <span className="hidden sm:inline">Size</span>
             </TabsTrigger>
-            <TabsTrigger value="filters" className="text-xs gap-1.5">
-              <Sparkles className="h-3.5 w-3.5" />
+            <TabsTrigger value="filters" className="text-xs gap-1">
+              <Sparkles className="h-3 w-3" />
               <span className="hidden sm:inline">Filters</span>
             </TabsTrigger>
-            <TabsTrigger value="quality" className="text-xs gap-1.5">
-              <Monitor className="h-3.5 w-3.5" />
+            <TabsTrigger value="quality" className="text-xs gap-1">
+              <Monitor className="h-3 w-3" />
               <span className="hidden sm:inline">Quality</span>
             </TabsTrigger>
-            <TabsTrigger value="metadata" className="text-xs gap-1.5">
-              <FileImage className="h-3.5 w-3.5" />
+            <TabsTrigger value="metadata" className="text-xs gap-1">
+              <FileImage className="h-3 w-3" />
               <span className="hidden sm:inline">Meta</span>
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="dimensions" className="space-y-4 mt-2">
-            <div className="space-y-2">
-              <Label className="text-xs font-medium">Quick Resolution</Label>
+          <TabsContent value="dimensions" className="space-y-3 mt-2 w-full max-w-full">
+            <div className="space-y-2 w-full max-w-full">
+              <Label className="text-[11px] font-medium">Quick Resolution</Label>
               <Select onValueChange={handleResolutionChange}>
-                <SelectTrigger className="h-9 text-sm">
+                <SelectTrigger className="h-8 text-sm">
                   <SelectValue placeholder="Select resolution..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -372,13 +367,13 @@ export function ImageSettingsPanel({
 
             <Separator />
 
-            <div className="space-y-2">
-              <Label className="text-xs font-medium">Aspect Ratio</Label>
+            <div className="space-y-2 w-full max-w-full">
+              <Label className="text-[11px] font-medium">Aspect Ratio</Label>
               <Select
                 value={aspectRatio?.toString() ?? 'null'}
                 onValueChange={handleAspectRatioChange}
               >
-                <SelectTrigger className="h-9 text-sm">
+                <SelectTrigger className="h-8 text-sm">
                   <SelectValue placeholder="Select aspect ratio..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -397,51 +392,36 @@ export function ImageSettingsPanel({
 
             <Separator />
 
-            <div className="space-y-2">
-              <Label className="text-xs font-medium">Transform</Label>
-              <div className="flex gap-1.5">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleRotate}
-                      className="flex-1 h-8 text-xs gap-1.5"
-                    >
-                      <RotateCw className="h-3.5 w-3.5" />
-                      Rotate
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Rotate 90° (Current: {settings.rotation || 0}°)</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant={settings.flipHorizontal ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={handleFlipHorizontal}
-                      className="flex-1 h-8 text-xs gap-1.5"
-                    >
-                      <FlipHorizontal className="h-3.5 w-3.5" />
-                      Flip H
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Flip horizontally</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant={settings.flipVertical ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={handleFlipVertical}
-                      className="flex-1 h-8 text-xs gap-1.5"
-                    >
-                      <FlipVertical className="h-3.5 w-3.5" />
-                      Flip V
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Flip vertically</TooltipContent>
-                </Tooltip>
+            <div className="space-y-2 w-full max-w-full">
+              <Label className="text-[11px] font-medium">Transform</Label>
+              <div className="flex gap-1 w-full">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRotate}
+                  className="flex-1 h-7 text-xs gap-1"
+                >
+                  <RotateCw className="h-3 w-3" />
+                  Rotate
+                </Button>
+                <Button
+                  variant={settings.flipHorizontal ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={handleFlipHorizontal}
+                  className="flex-1 h-7 text-xs gap-1"
+                >
+                  <FlipHorizontal className="h-3 w-3" />
+                  Flip H
+                </Button>
+                <Button
+                  variant={settings.flipVertical ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={handleFlipVertical}
+                  className="flex-1 h-7 text-xs gap-1"
+                >
+                  <FlipVertical className="h-3 w-3" />
+                  Flip V
+                </Button>
               </div>
               {(settings.rotation !== 0 || settings.flipHorizontal || settings.flipVertical) && (
                 <p className="text-[10px] text-muted-foreground">
@@ -452,73 +432,61 @@ export function ImageSettingsPanel({
 
             <Separator />
 
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-medium">Dimensions (px)</Label>
+            <div className="space-y-2 w-full max-w-full">
+              <div className="flex items-center justify-between w-full">
+                <Label className="text-[11px] font-medium">Dimensions (px)</Label>
                 <div className="flex items-center gap-1">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => setLockRatio(!lockRatio)}
-                      >
-                        {lockRatio ? (
-                          <Lock className="h-3.5 w-3.5 text-primary" />
-                        ) : (
-                          <Unlock className="h-3.5 w-3.5" />
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">
-                      {lockRatio ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
-                    </TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={resetToOriginal}
-                      >
-                        <RefreshCcw className="h-3.5 w-3.5" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">Reset to original</TooltipContent>
-                  </Tooltip>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => setLockRatio(!lockRatio)}
+                  >
+                    {lockRatio ? (
+                      <Lock className="h-3 w-3 text-primary" />
+                    ) : (
+                      <Unlock className="h-3 w-3" />
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={resetToOriginal}
+                  >
+                    <RefreshCcw className="h-3 w-3" />
+                  </Button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
+              <div className="grid grid-cols-2 gap-2 w-full">
+                <div className="space-y-1">
                   <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Width</Label>
                   <Input
                     type="number"
                     value={settings.width || ''}
                     onChange={(e) => handleWidthChange(e.target.value)}
                     placeholder={image.dimensions.width.toString()}
-                    className="h-9 text-sm"
+                    className="h-8 text-sm"
                     min={1}
                     max={16384}
                   />
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Height</Label>
                   <Input
                     type="number"
                     value={settings.height || ''}
                     onChange={(e) => handleHeightChange(e.target.value)}
                     placeholder={image.dimensions.height.toString()}
-                    className="h-9 text-sm"
+                    className="h-8 text-sm"
                     min={1}
                     max={16384}
                   />
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 pt-1">
+              <div className="flex items-center gap-2">
                 <Checkbox
                   id="maintain-ratio"
                   checked={settings.maintainAspectRatio}
@@ -532,18 +500,18 @@ export function ImageSettingsPanel({
               </div>
             </div>
 
-            <div className="pt-2">
+            <div className="pt-1">
               <Badge variant="secondary" className="text-[10px] font-normal">
                 Original: {image.dimensions.width} × {image.dimensions.height}
               </Badge>
             </div>
           </TabsContent>
 
-          <TabsContent value="filters" className="space-y-4 mt-2">
-            <div className="space-y-2">
-              <Label className="text-xs font-medium">Filter Presets</Label>
+          <TabsContent value="filters" className="space-y-3 mt-2 w-full max-w-full">
+            <div className="space-y-2 w-full max-w-full">
+              <Label className="text-[11px] font-medium">Filter Presets</Label>
               <Select onValueChange={handlePresetChange}>
-                <SelectTrigger className="h-9 text-sm">
+                <SelectTrigger className="h-8 text-sm">
                   <SelectValue placeholder="Select a preset..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -558,17 +526,17 @@ export function ImageSettingsPanel({
 
             <Separator />
 
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground">
-                Adjust image filters and effects
+            <div className="flex items-center justify-between w-full">
+              <span className="text-[11px] font-medium text-muted-foreground">
+                Adjust image filters
               </span>
-              <Button variant="ghost" size="sm" onClick={resetFilters} className="h-7 text-xs gap-1.5">
-                <RotateCcw className="h-3 w-3" />
+              <Button variant="ghost" size="sm" onClick={resetFilters} className="h-6 text-xs gap-1 px-2">
+                <RotateCcw className="h-2.5 w-2.5" />
                 Reset All
               </Button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3 w-full max-w-full">
               <FilterSlider
                 label="Brightness"
                 value={settings.filters?.brightness ?? 100}
@@ -643,16 +611,16 @@ export function ImageSettingsPanel({
             </div>
           </TabsContent>
 
-          <TabsContent value="quality" className="space-y-4 mt-2">
-            <div className="space-y-2">
-              <Label className="text-xs font-medium">Output Format</Label>
+          <TabsContent value="quality" className="space-y-3 mt-2 w-full max-w-full">
+            <div className="space-y-2 w-full max-w-full">
+              <Label className="text-[11px] font-medium">Output Format</Label>
               <Select
                 value={settings.format}
                 onValueChange={(value: 'jpeg' | 'png' | 'webp') =>
                   updateSettings({ format: value })
                 }
               >
-                <SelectTrigger className="h-9 text-sm">
+                <SelectTrigger className="h-8 text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -666,19 +634,19 @@ export function ImageSettingsPanel({
             <Separator />
 
             {settings.format !== 'png' && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs font-medium">Quality</Label>
-                  <div className="flex items-center gap-1.5">
+              <div className="space-y-2 w-full max-w-full">
+                <div className="flex items-center justify-between w-full">
+                  <Label className="text-[11px] font-medium">Quality</Label>
+                  <div className="flex items-center gap-1">
                     <Input
                       type="number"
                       value={settings.quality}
                       onChange={(e) => handleQualityChange(e.target.value)}
-                      className="h-6 w-14 text-xs text-right px-1.5"
+                      className="h-6 w-12 text-xs text-right px-1"
                       min={1}
                       max={100}
                     />
-                    <span className="text-xs text-muted-foreground">%</span>
+                    <span className="text-[10px] text-muted-foreground">%</span>
                     {settings.quality !== 85 && (
                       <Button
                         variant="ghost"
@@ -686,7 +654,7 @@ export function ImageSettingsPanel({
                         onClick={() => updateSettings({ quality: 85 })}
                         className="h-5 w-5 p-0 hover:bg-muted"
                       >
-                        <RotateCcw className="h-3 w-3 text-muted-foreground" />
+                        <RotateCcw className="h-2.5 w-2.5 text-muted-foreground" />
                       </Button>
                     )}
                   </div>
@@ -700,26 +668,26 @@ export function ImageSettingsPanel({
                   className="w-full"
                 />
                 <p className="text-[10px] text-muted-foreground">
-                  Higher quality results in larger file size
+                  Higher quality = larger file size
                 </p>
               </div>
             )}
 
             <Separator />
 
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-medium">DPI (Resolution)</Label>
-                <div className="flex items-center gap-1.5">
+            <div className="space-y-2 w-full max-w-full">
+              <div className="flex items-center justify-between w-full">
+                <Label className="text-[11px] font-medium">DPI (Resolution)</Label>
+                <div className="flex items-center gap-1">
                   <Input
                     type="number"
                     value={settings.dpi}
                     onChange={(e) => handleDpiChange(e.target.value)}
-                    className="h-6 w-14 text-xs text-right px-1.5"
+                    className="h-6 w-12 text-xs text-right px-1"
                     min={72}
                     max={600}
                   />
-                  <span className="text-xs text-muted-foreground">DPI</span>
+                  <span className="text-[10px] text-muted-foreground">DPI</span>
                   {settings.dpi !== 72 && (
                     <Button
                       variant="ghost"
@@ -727,7 +695,7 @@ export function ImageSettingsPanel({
                       onClick={() => updateSettings({ dpi: 72 })}
                       className="h-5 w-5 p-0 hover:bg-muted"
                     >
-                      <RotateCcw className="h-3 w-3 text-muted-foreground" />
+                      <RotateCcw className="h-2.5 w-2.5 text-muted-foreground" />
                     </Button>
                   )}
                 </div>
@@ -740,14 +708,14 @@ export function ImageSettingsPanel({
                 step={1}
                 className="w-full"
               />
-              <div className="flex gap-1.5">
+              <div className="flex gap-1 w-full">
                 {[72, 150, 300, 600].map((dpi) => (
                   <Button
                     key={dpi}
                     variant={settings.dpi === dpi ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => updateSettings({ dpi })}
-                    className="flex-1 h-7 text-xs"
+                    className="flex-1 h-6 text-xs"
                   >
                     {dpi}
                   </Button>
@@ -756,7 +724,7 @@ export function ImageSettingsPanel({
             </div>
           </TabsContent>
 
-          <TabsContent value="metadata" className="space-y-4 mt-2">
+          <TabsContent value="metadata" className="space-y-3 mt-2 w-full max-w-full">
             {hasGPS && settings.preserveMetadata && (
               <Alert className="border-amber-500/50 bg-amber-500/10">
                 <MapPin className="h-4 w-4 text-amber-500" />
