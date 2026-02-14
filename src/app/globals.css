@@ -191,6 +191,11 @@ input[type="number"]:focus::-webkit-inner-spin-button {
   margin: 0;
 }
 
+/* Prevent page scroll when scrolling on number inputs */
+input[type="number"]:focus {
+  overscroll-behavior: contain;
+}
+
 /* Custom Scrollbar - Global Styles */
 @layer base {
   /* Webkit browsers (Chrome, Safari, Edge) */

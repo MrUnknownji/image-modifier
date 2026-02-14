@@ -31,7 +31,17 @@ import {
 import type { ProcessedImage, ImageSettings } from '@/types/image';
 import { processImage, formatFileSize } from '@/lib/image-processing';
 import JSZip from 'jszip';
-import { saveAs } from 'file-saver';
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
 
 interface BatchProcessorProps {
   images: ProcessedImage[];
@@ -106,10 +116,10 @@ export function BatchProcessor({
     if (processedImages.length > 0) {
       if (processedImages.length === 1) {
         const { name, blob } = processedImages[0];
-        saveAs(blob, name);
+        downloadBlob(blob, name);
       } else {
         const content = await zip.generateAsync({ type: 'blob' });
-        saveAs(content, 'processed_images.zip');
+        downloadBlob(content, 'processed_images.zip');
       }
     }
 

@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
-import { ImagePlus, Sparkles, Github, Shield, Zap, Image as ImageIcon } from 'lucide-react';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { ImagePlus, Sparkles, Shield, Zap, Image as ImageIcon, Undo2, Redo2, Check, Lock, Cpu, Layers, Palette, Wand2, FileImage, HardDrive, Globe } from 'lucide-react';
+import { Toaster, toast } from 'sonner';
 import { Logo, LogoSmall } from '@/components/ui/logo';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,6 +14,14 @@ import {
 } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { ErrorBoundary } from '@/components/error-boundary';
 import { ImageUploader } from '@/components/image-modifier/image-uploader';
 import { ImageSettingsPanel } from '@/components/image-modifier/image-settings-panel';
 import { ImagePreview } from '@/components/image-modifier/image-preview';
@@ -28,14 +37,68 @@ import type {
   ImageSettings,
 } from '@/types/image';
 
-export default function Home() {
+const MAX_FILE_SIZE = 100 * 1024 * 1024;
+const MAX_DIMENSION = 16384;
+
+function ImageModifierApp() {
   const [images, setImages] = useState<ProcessedImage[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [processedBlob, setProcessedBlob] = useState<Blob | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [aspectRatio] = useState<number | null>(null);
+  const [showFeaturesDialog, setShowFeaturesDialog] = useState(false);
+  const [showPrivacyDialog, setShowPrivacyDialog] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const selectedImage = images.find((img) => img.id === selectedId) || null;
+
+  const canUndo = selectedImage && selectedImage.historyIndex > 0;
+  const canRedo = selectedImage && selectedImage.historyIndex < selectedImage.history.length - 1;
+
+  const addHistoryEntry = useCallback((imageId: string, settings: ImageSettings, action: string) => {
+    setImages((prev) =>
+      prev.map((img) => {
+        if (img.id !== imageId) return img;
+        
+        const newHistory = img.history.slice(0, img.historyIndex + 1);
+        newHistory.push({ settings: { ...settings }, timestamp: Date.now(), action });
+        
+        return {
+          ...img,
+          history: newHistory,
+          historyIndex: newHistory.length - 1,
+        };
+      })
+    );
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    if (!selectedImage || !canUndo) return;
+    
+    const newIndex = selectedImage.historyIndex - 1;
+    const historicalSettings = selectedImage.history[newIndex].settings;
+    
+    setImages((prev) =>
+      prev.map((img) =>
+        img.id === selectedId ? { ...img, settings: historicalSettings, historyIndex: newIndex } : img
+      )
+    );
+    toast.success('Undone');
+  }, [selectedImage, selectedId, canUndo]);
+
+  const handleRedo = useCallback(() => {
+    if (!selectedImage || !canRedo) return;
+    
+    const newIndex = selectedImage.historyIndex + 1;
+    const historicalSettings = selectedImage.history[newIndex].settings;
+    
+    setImages((prev) =>
+      prev.map((img) =>
+        img.id === selectedId ? { ...img, settings: historicalSettings, historyIndex: newIndex } : img
+      )
+    );
+    toast.success('Redone');
+  }, [selectedImage, selectedId, canRedo]);
 
   const handleImagesAdd = useCallback(
     async (files: FileList) => {
@@ -43,20 +106,37 @@ export default function Home() {
       
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        if (file.type.startsWith('image/')) {
-          try {
-            const processedImage = await createProcessedImage(file);
-            newImages.push(processedImage);
-          } catch (error) {
-            console.error('Failed to process image:', error);
+        if (!file.type.startsWith('image/')) {
+          toast.error(`Skipped ${file.name}: Not an image file`);
+          continue;
+        }
+        
+        if (file.size > MAX_FILE_SIZE) {
+          toast.error(`Skipped ${file.name}: File too large (max 100MB)`);
+          continue;
+        }
+        
+        try {
+          const processedImage = await createProcessedImage(file);
+          
+          if (processedImage.dimensions.width > MAX_DIMENSION || processedImage.dimensions.height > MAX_DIMENSION) {
+            toast.warning(`${file.name}: Very large image may cause performance issues`);
           }
+          
+          newImages.push(processedImage);
+        } catch (error) {
+          console.error('Failed to process image:', error);
+          toast.error(`Failed to load ${file.name}`);
         }
       }
 
-      setImages((prev) => [...prev, ...newImages]);
-      
-      if (newImages.length > 0 && !selectedId) {
-        setSelectedId(newImages[0].id);
+      if (newImages.length > 0) {
+        setImages((prev) => [...prev, ...newImages]);
+        toast.success(`Added ${newImages.length} image(s)`);
+        
+        if (!selectedId) {
+          setSelectedId(newImages[0].id);
+        }
       }
     },
     [selectedId]
@@ -64,6 +144,11 @@ export default function Home() {
 
   const handleImageRemove = useCallback((id: string) => {
     setImages((prev) => {
+      const imageToRemove = prev.find(img => img.id === id);
+      if (imageToRemove?.originalUrl) {
+        URL.revokeObjectURL(imageToRemove.originalUrl);
+      }
+      
       const newImages = prev.filter((img) => img.id !== id);
       if (id === selectedId) {
         setSelectedId(newImages.length > 0 ? newImages[0].id : null);
@@ -71,11 +156,17 @@ export default function Home() {
       return newImages;
     });
     setProcessedBlob(null);
+    toast.success('Image removed');
   }, [selectedId]);
 
   const handleSettingsChange = useCallback(
     async (settings: ImageSettings) => {
-      if (!selectedImage) return;
+      if (!selectedImage || !selectedId) return;
+
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      abortControllerRef.current = new AbortController();
 
       setImages((prev) =>
         prev.map((img) =>
@@ -83,19 +174,23 @@ export default function Home() {
         )
       );
 
-      // Auto-process when settings change
       setIsProcessing(true);
       try {
         const updatedImage = { ...selectedImage, settings };
-        const blob = await processImage(updatedImage, aspectRatio);
+        const blob = await processImage(updatedImage, aspectRatio, abortControllerRef.current.signal);
         setProcessedBlob(blob);
+        
+        addHistoryEntry(selectedId, settings, 'Settings changed');
       } catch (error) {
-        console.error('Failed to process image:', error);
+        if ((error as Error).message !== 'Processing aborted') {
+          console.error('Failed to process image:', error);
+          toast.error('Failed to process image');
+        }
       } finally {
         setIsProcessing(false);
       }
     },
-    [selectedImage, selectedId, aspectRatio]
+    [selectedImage, selectedId, aspectRatio, addHistoryEntry]
   );
 
   const handleApplyToAll = useCallback(() => {
@@ -108,6 +203,7 @@ export default function Home() {
           : { ...img, settings: { ...selectedImage.settings } }
       )
     );
+    toast.success('Applied settings to all images');
   }, [selectedImage, selectedId]);
 
   const handleDownload = useCallback(() => {
@@ -120,9 +216,9 @@ export default function Home() {
     
     downloadImage(url, newName);
     URL.revokeObjectURL(url);
+    toast.success('Image downloaded');
   }, [processedBlob, selectedImage]);
 
-  // Process image when selection changes
   useEffect(() => {
     const processSelected = async () => {
       if (!selectedImage) {
@@ -130,25 +226,132 @@ export default function Home() {
         return;
       }
 
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      abortControllerRef.current = new AbortController();
+      const currentController = abortControllerRef.current;
+
       setIsProcessing(true);
       try {
-        const blob = await processImage(selectedImage, aspectRatio);
-        setProcessedBlob(blob);
+        const blob = await processImage(selectedImage, aspectRatio, currentController.signal);
+        if (!currentController.signal.aborted) {
+          setProcessedBlob(blob);
+        }
       } catch (error) {
-        console.error('Failed to process image:', error);
-        setProcessedBlob(null);
+        if ((error as Error).message !== 'Processing aborted' && !currentController.signal.aborted) {
+          console.error('Failed to process image:', error);
+          setProcessedBlob(null);
+        }
       } finally {
-        setIsProcessing(false);
+        if (!currentController.signal.aborted) {
+          setIsProcessing(false);
+        }
       }
     };
 
     processSelected();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedImage?.id, aspectRatio, selectedImage]);
+    
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [selectedImage?.id, aspectRatio]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isCtrl = e.ctrlKey || e.metaKey;
+      
+      if (isCtrl && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+      } else if (isCtrl && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) {
+        e.preventDefault();
+        handleRedo();
+      } else if (isCtrl && e.key === 's') {
+        e.preventDefault();
+        handleDownload();
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedId && document.activeElement?.tagName !== 'INPUT') {
+          e.preventDefault();
+          handleImageRemove(selectedId);
+        }
+      }
+    };
+
+    const handlePaste = async (e: ClipboardEvent) => {
+      if (document.activeElement?.tagName === 'INPUT') return;
+      
+      const items = e.clipboardData?.items;
+      if (items) {
+        const files: File[] = [];
+        for (const item of items) {
+          if (item.type.startsWith('image/')) {
+            const file = item.getAsFile();
+            if (file) files.push(file);
+          }
+        }
+        if (files.length > 0) {
+          const dataTransfer = new DataTransfer();
+          files.forEach(f => dataTransfer.items.add(f));
+          await handleImagesAdd(dataTransfer.files);
+          toast.success('Image pasted from clipboard');
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('paste', handlePaste);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('paste', handlePaste);
+    };
+  }, [handleUndo, handleRedo, handleDownload, handleImageRemove, handleImagesAdd, selectedId]);
+
+  useEffect(() => {
+    return () => {
+      images.forEach(img => {
+        if (img.originalUrl) {
+          URL.revokeObjectURL(img.originalUrl);
+        }
+      });
+    };
+  }, []);
+
+  // Prevent page scroll when scrolling on number inputs
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' && target.getAttribute('type') === 'number') {
+        // Allow the input value to change but prevent page scroll
+        e.preventDefault();
+        // Manually trigger the scroll behavior on the input
+        const input = target as HTMLInputElement;
+        const step = parseFloat(input.step) || 1;
+        const currentValue = parseFloat(input.value) || 0;
+        const delta = e.deltaY > 0 ? -step : step;
+        const min = parseFloat(input.min) || -Infinity;
+        const max = parseFloat(input.max) || Infinity;
+        const newValue = Math.max(min, Math.min(max, currentValue + delta));
+        input.value = newValue.toString();
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    };
+
+    // Use capture phase to intercept before it bubbles
+    document.addEventListener('wheel', handleWheel, { passive: false });
+    
+    return () => {
+      document.removeEventListener('wheel', handleWheel);
+    };
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      {/* Header */}
+      <Toaster position="bottom-right" richColors closeButton />
+      
       <header className="sticky top-0 z-50 border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
@@ -161,22 +364,33 @@ export default function Home() {
                 </p>
               </div>
             </div>
-            <div className="hidden sm:flex items-center gap-1">
-              <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground">
-                <Zap className="h-4 w-4" />
-                Features
-              </Button>
-              <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground">
-                <Shield className="h-4 w-4" />
-                Privacy
-              </Button>
+            <div className="flex items-center gap-1">
+              {canUndo && (
+                <Button variant="ghost" size="icon" onClick={handleUndo} className="h-8 w-8" title="Undo (Ctrl+Z)">
+                  <Undo2 className="h-4 w-4" />
+                </Button>
+              )}
+              {canRedo && (
+                <Button variant="ghost" size="icon" onClick={handleRedo} className="h-8 w-8" title="Redo (Ctrl+Y)">
+                  <Redo2 className="h-4 w-4" />
+                </Button>
+              )}
+              <div className="hidden sm:flex items-center gap-1 ml-2">
+                <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground" onClick={() => setShowFeaturesDialog(true)}>
+                  <Zap className="h-4 w-4" />
+                  Features
+                </Button>
+                <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground" onClick={() => setShowPrivacyDialog(true)}>
+                  <Shield className="h-4 w-4" />
+                  Privacy
+                </Button>
+              </div>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-1 container mx-auto px-4 py-8">
+      <main className="flex-1 container mx-auto px-4 py-8 overflow-hidden w-full max-w-[100vw]">
         <Tabs defaultValue="modify" className="space-y-6">
           <div className="flex justify-center">
             <TabsList className="grid w-full max-w-md grid-cols-2">
@@ -191,10 +405,9 @@ export default function Home() {
             </TabsList>
           </div>
 
-          <TabsContent value="modify" className="space-y-6">
-            <div className="grid lg:grid-cols-[minmax(0,380px)_1fr] gap-6">
-              {/* Left Sidebar */}
-              <div className="space-y-6 min-w-0 w-full">
+          <TabsContent value="modify" className="space-y-6 overflow-hidden">
+            <div className="grid lg:grid-cols-[minmax(0,380px)_1fr] gap-6 max-w-full">
+              <div className="space-y-6 min-w-0 w-full max-w-full">
                 <Card className="overflow-hidden min-w-0">
                   <CardHeader className="pb-4">
                     <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -205,7 +418,7 @@ export default function Home() {
                       Upload and manage your images
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="min-w-0 w-full">
+                  <CardContent className="min-w-0">
                     <ImageUploader
                       images={images}
                       onImagesAdd={handleImagesAdd}
@@ -224,7 +437,6 @@ export default function Home() {
                 />
               </div>
 
-              {/* Main Preview Area */}
               <div className="space-y-6">
                 <ImagePreview
                   image={selectedImage}
@@ -260,13 +472,7 @@ export default function Home() {
                 {selectedImage && (
                   <ImageSettingsPanel
                     image={selectedImage}
-                    onSettingsChange={(settings) => {
-                      setImages((prev) =>
-                        prev.map((img) =>
-                          img.id === selectedId ? { ...img, settings } : img
-                        )
-                      );
-                    }}
+                    onSettingsChange={handleSettingsChange}
                     onApplyToAll={handleApplyToAll}
                     hasMultipleImages={images.length > 1}
                   />
@@ -291,6 +497,9 @@ export default function Home() {
                       blur: 0,
                       hueRotate: 0,
                     },
+                    rotation: 0,
+                    flipHorizontal: false,
+                    flipVertical: false,
                   }}
                   aspectRatio={aspectRatio}
                 />
@@ -300,11 +509,9 @@ export default function Home() {
         </Tabs>
       </main>
 
-      {/* Footer */}
       <footer className="border-t border-border/40 bg-muted/30">
         <div className="container mx-auto px-4 py-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {/* Brand */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <LogoSmall size={32} />
@@ -316,7 +523,6 @@ export default function Home() {
               </p>
             </div>
 
-            {/* Features */}
             <div className="space-y-3">
               <h3 className="font-semibold text-sm">Features</h3>
               <ul className="space-y-2">
@@ -339,21 +545,12 @@ export default function Home() {
               </ul>
             </div>
 
-            {/* Privacy & Links */}
             <div className="space-y-3">
               <h3 className="font-semibold text-sm">Privacy & Security</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 All image processing happens directly in your browser. 
                 No data is ever uploaded to any server, ensuring complete privacy.
               </p>
-              <div className="flex items-center gap-2 pt-2">
-                <Button variant="outline" size="sm" className="gap-2" asChild>
-                  <a href="https://github.com/MrUnknownji/image-modifier" target="_blank" rel="noopener noreferrer">
-                    <Github className="h-4 w-4" />
-                    GitHub
-                  </a>
-                </Button>
-              </div>
             </div>
           </div>
 
@@ -368,6 +565,131 @@ export default function Home() {
           </div>
         </div>
       </footer>
+
+      <Dialog open={showFeaturesDialog} onOpenChange={setShowFeaturesDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5 text-primary" />
+              Features
+            </DialogTitle>
+            <DialogDescription>
+              Powerful image processing tools at your fingertips
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                <Cpu className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <h4 className="text-sm font-medium">Fast Processing</h4>
+                <p className="text-xs text-muted-foreground mt-0.5">All image processing happens locally in your browser using Canvas API for maximum speed.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                <Layers className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <h4 className="text-sm font-medium">Batch Processing</h4>
+                <p className="text-xs text-muted-foreground mt-0.5">Process multiple images at once with shared settings and download as a ZIP file.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                <Palette className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <h4 className="text-sm font-medium">Filters & Effects</h4>
+                <p className="text-xs text-muted-foreground mt-0.5">Adjust brightness, contrast, saturation, and more. Apply preset filters for quick edits.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                <Wand2 className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <h4 className="text-sm font-medium">Format Conversion</h4>
+                <p className="text-xs text-muted-foreground mt-0.5">Convert between JPEG, PNG, and WebP formats with adjustable quality settings.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                <FileImage className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <h4 className="text-sm font-medium">Resize & Transform</h4>
+                <p className="text-xs text-muted-foreground mt-0.5">Resize to custom dimensions or preset resolutions. Rotate and flip images easily.</p>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showPrivacyDialog} onOpenChange={setShowPrivacyDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-primary" />
+              Privacy & Security
+            </DialogTitle>
+            <DialogDescription>
+              Your data stays with you, always
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-500/20">
+                <Lock className="h-4 w-4 text-green-600" />
+              </div>
+              <div>
+                <h4 className="text-sm font-medium text-green-700 dark:text-green-400">100% Client-Side Processing</h4>
+                <p className="text-xs text-muted-foreground mt-0.5">All image processing happens directly in your browser. Your images never leave your device.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                <HardDrive className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <h4 className="text-sm font-medium">No Server Uploads</h4>
+                <p className="text-xs text-muted-foreground mt-0.5">We don&apos;t have servers to store your images. Everything stays on your computer.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                <Globe className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <h4 className="text-sm font-medium">No Tracking</h4>
+                <p className="text-xs text-muted-foreground mt-0.5">No analytics, no cookies tracking your usage, no third-party scripts collecting your data.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                <FileImage className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <h4 className="text-sm font-medium">EXIF Control</h4>
+                <p className="text-xs text-muted-foreground mt-0.5">You decide whether to keep or remove metadata like GPS location and camera info from your images.</p>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 p-3 bg-muted rounded-lg mt-2">
+            <Check className="h-4 w-4 text-green-600" />
+            <span className="text-xs text-muted-foreground">Open source and fully transparent</span>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <ErrorBoundary>
+      <ImageModifierApp />
+    </ErrorBoundary>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   ZoomIn,
   ZoomOut,
@@ -53,15 +53,36 @@ export function ImagePreview({
   const [zoom, setZoom] = useState(1);
   const [activeTab, setActiveTab] = useState<'original' | 'processed'>('processed');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const prevBlobUrlRef = useRef<string | null>(null);
 
-  // Memoize display URL to prevent unnecessary re-renders
+  const blobUrl = useMemo(() => {
+    if (processedBlob) {
+      return URL.createObjectURL(processedBlob);
+    }
+    return null;
+  }, [processedBlob]);
+
+  useEffect(() => {
+    if (prevBlobUrlRef.current && prevBlobUrlRef.current !== blobUrl) {
+      URL.revokeObjectURL(prevBlobUrlRef.current);
+    }
+    prevBlobUrlRef.current = blobUrl;
+  }, [blobUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (prevBlobUrlRef.current) {
+        URL.revokeObjectURL(prevBlobUrlRef.current);
+      }
+    };
+  }, []);
+
   const displayUrl = useMemo(() => {
-    return activeTab === 'processed' && processedBlob
-      ? URL.createObjectURL(processedBlob)
-      : image?.originalUrl || '';
-  }, [activeTab, processedBlob, image?.originalUrl]);
-
-  // Note: blob URL cleanup is handled by the browser when the component unmounts
+    if (activeTab === 'processed' && blobUrl) {
+      return blobUrl;
+    }
+    return image?.originalUrl || '';
+  }, [activeTab, blobUrl, image?.originalUrl]);
 
   const fileSize =
     activeTab === 'processed' && processedBlob

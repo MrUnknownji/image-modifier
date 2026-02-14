@@ -4,7 +4,6 @@ import { useCallback } from "react";
 import { Upload, X, ImageIcon, Trash2, Images } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { formatFileSize } from "@/lib/image-processing";
 import type { ProcessedImage } from "@/types/image";
@@ -55,8 +54,7 @@ export function ImageUploader({
   };
 
   return (
-    <div className="space-y-4">
-      {/* Upload Area */}
+    <div className="space-y-4 min-w-0">
       <Card
         className="relative border-2 border-dashed border-border/60 bg-muted/30 p-6 text-center transition-all duration-200 hover:border-primary/40 hover:bg-muted/50 cursor-pointer group"
         onDrop={handleDrop}
@@ -75,7 +73,7 @@ export function ImageUploader({
               or click to browse files
             </p>
           </div>
-          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground uppercase tracking-wider">
+          <div className="flex flex-wrap items-center justify-center gap-1.5 text-[10px] text-muted-foreground uppercase tracking-wider">
             <span className="px-1.5 py-0.5 bg-muted rounded">JPG</span>
             <span className="px-1.5 py-0.5 bg-muted rounded">PNG</span>
             <span className="px-1.5 py-0.5 bg-muted rounded">WebP</span>
@@ -94,12 +92,11 @@ export function ImageUploader({
         />
       </Card>
 
-      {/* Image List */}
       {images.length > 0 && (
         <>
           <Separator />
 
-          <div className="space-y-3">
+          <div className="space-y-3 min-w-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Images className="h-4 w-4 text-muted-foreground" />
@@ -118,19 +115,18 @@ export function ImageUploader({
               </Button>
             </div>
 
-            <div className="h-[280px] rounded-lg border border-border/60 overflow-y-auto">
-              <div className="p-2 space-y-1 w-full">
+            <div className="h-[280px] rounded-lg border border-border/60 overflow-y-auto overflow-x-hidden">
+              <div className="p-2 space-y-1">
                 {images.map((image) => (
                   <div
                     key={image.id}
-                    className={`group flex items-center gap-3 p-2.5 rounded-md cursor-pointer transition-all duration-150 w-full mx-auto ${
+                    className={`group flex items-center gap-3 p-2.5 rounded-md cursor-pointer transition-all duration-150 ${
                       selectedId === image.id
                         ? "bg-primary/5 border border-primary/20 shadow-sm"
                         : "hover:bg-muted/60 border border-transparent"
                     }`}
                     onClick={() => onImageSelect(image.id)}
                   >
-                    {/* Thumbnail */}
                     <div className="relative w-10 h-10 rounded-md overflow-hidden bg-muted flex-shrink-0 ring-1 ring-border">
                       {image.originalUrl ? (
                         <img
@@ -143,23 +139,21 @@ export function ImageUploader({
                       )}
                     </div>
 
-                    {/* Info */}
                     <div className="flex-1 min-w-0 overflow-hidden">
                       <div className="flex items-center gap-2 min-w-0">
-                        <p className="text-sm font-medium truncate text-foreground flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate text-foreground">
                           {image.metadata.name.replace(/\.[^/.]+$/, "")}
                         </p>
                         <span className="text-[10px] px-1.5 py-0.5 bg-muted rounded text-muted-foreground font-medium uppercase flex-shrink-0">
                           {image.metadata.name.split(".").pop()?.toLowerCase()}
                         </span>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">
                         {image.dimensions.width} × {image.dimensions.height} •{" "}
                         {formatFileSize(image.metadata.size)}
                       </p>
                     </div>
 
-                    {/* Remove Button */}
                     <Button
                       variant="ghost"
                       size="icon"

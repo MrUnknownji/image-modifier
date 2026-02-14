@@ -59,6 +59,33 @@ export interface ImageSettings {
   dpi: number;
   preserveMetadata: boolean;
   filters: ImageFilters;
+  rotation: number;
+  flipHorizontal: boolean;
+  flipVertical: boolean;
+}
+
+export interface HistoryState {
+  settings: ImageSettings;
+  timestamp: number;
+  action: string;
+}
+
+export interface ProcessedImage {
+  id: string;
+  originalFile: File;
+  originalUrl: string;
+  processedUrl: string | null;
+  metadata: ImageMetadata;
+  dimensions: ImageDimensions;
+  exif: EXIFData | null;
+  settings: ImageSettings;
+  history: HistoryState[];
+  historyIndex: number;
+}
+
+export interface FilterPreset {
+  name: string;
+  filters: ImageFilters;
 }
 
 export interface AspectRatio {
@@ -76,6 +103,41 @@ export const COMMON_ASPECT_RATIOS: AspectRatio[] = [
   { name: '21:9 (Ultrawide)', value: 21 / 9 },
   { name: '9:16 (Portrait)', value: 9 / 16 },
   { name: '5:4 (Large Format)', value: 5 / 4 },
+];
+
+export const FILTER_PRESETS: FilterPreset[] = [
+  { 
+    name: 'Original', 
+    filters: { brightness: 100, contrast: 100, saturation: 100, grayscale: 0, sepia: 0, blur: 0, hueRotate: 0 }
+  },
+  { 
+    name: 'Vintage', 
+    filters: { brightness: 105, contrast: 90, saturation: 80, grayscale: 0, sepia: 30, blur: 0, hueRotate: 0 }
+  },
+  { 
+    name: 'Dramatic', 
+    filters: { brightness: 100, contrast: 130, saturation: 120, grayscale: 0, sepia: 0, blur: 0, hueRotate: 0 }
+  },
+  { 
+    name: 'B&W', 
+    filters: { brightness: 100, contrast: 110, saturation: 0, grayscale: 100, sepia: 0, blur: 0, hueRotate: 0 }
+  },
+  { 
+    name: 'Warm', 
+    filters: { brightness: 105, contrast: 100, saturation: 110, grayscale: 0, sepia: 15, blur: 0, hueRotate: 0 }
+  },
+  { 
+    name: 'Cool', 
+    filters: { brightness: 100, contrast: 105, saturation: 105, grayscale: 0, sepia: 0, blur: 0, hueRotate: 200 }
+  },
+  { 
+    name: 'Faded', 
+    filters: { brightness: 110, contrast: 85, saturation: 90, grayscale: 0, sepia: 10, blur: 0, hueRotate: 0 }
+  },
+  { 
+    name: 'Vivid', 
+    filters: { brightness: 105, contrast: 115, saturation: 140, grayscale: 0, sepia: 0, blur: 0, hueRotate: 0 }
+  },
 ];
 
 export const COMMON_RESOLUTIONS = [

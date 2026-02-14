@@ -2,7 +2,7 @@ import type { ImageDimensions, ImageSettings, EXIFData, ProcessedImage } from '@
 import exifr from 'exifr';
 
 export function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  return `${Date.now()}-${crypto.randomUUID?.() ?? Math.random().toString(36).substr(2, 9)}`;
 }
 
 export function formatFileSize(bytes: number): string {
@@ -16,11 +16,16 @@ export function formatFileSize(bytes: number): string {
 export async function getImageDimensions(file: File): Promise<ImageDimensions> {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    const blobUrl = URL.createObjectURL(file);
     img.onload = () => {
+      URL.revokeObjectURL(blobUrl);
       resolve({ width: img.width, height: img.height });
     };
-    img.onerror = reject;
-    img.src = URL.createObjectURL(file);
+    img.onerror = () => {
+      URL.revokeObjectURL(blobUrl);
+      reject(new Error('Failed to load image'));
+    };
+    img.src = blobUrl;
   });
 }
 
@@ -95,7 +100,8 @@ export function calculateDimensions(
 
 export async function processImage(
   image: ProcessedImage,
-  aspectRatio: number | null
+  aspectRatio: number | null,
+  signal?: AbortSignal
 ): Promise<Blob> {
   const { originalFile, dimensions: originalDimensions, settings } = image;
   
@@ -107,11 +113,42 @@ export async function processImage(
   );
 
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new Error('Processing aborted'));
+      return;
+    }
+
     const img = new Image();
+    const blobUrl = URL.createObjectURL(originalFile);
+    
+    const abortHandler = () => {
+      URL.revokeObjectURL(blobUrl);
+      img.src = '';
+      reject(new Error('Processing aborted'));
+    };
+    
+    signal?.addEventListener('abort', abortHandler);
+    
     img.onload = () => {
+      URL.revokeObjectURL(blobUrl);
+      signal?.removeEventListener('abort', abortHandler);
+      
+      if (signal?.aborted) {
+        reject(new Error('Processing aborted'));
+        return;
+      }
+
+      const { rotation = 0, flipHorizontal = false, flipVertical = false } = settings;
+      const radians = (rotation * Math.PI) / 180;
+      
+      const sin = Math.abs(Math.sin(radians));
+      const cos = Math.abs(Math.cos(radians));
+      const rotatedWidth = Math.ceil(targetDimensions.width * cos + targetDimensions.height * sin);
+      const rotatedHeight = Math.ceil(targetDimensions.width * sin + targetDimensions.height * cos);
+      
       const canvas = document.createElement('canvas');
-      canvas.width = targetDimensions.width;
-      canvas.height = targetDimensions.height;
+      canvas.width = Math.max(1, Math.min(16384, rotatedWidth));
+      canvas.height = Math.max(1, Math.min(16384, rotatedHeight));
       
       const ctx = canvas.getContext('2d');
       if (!ctx) {
@@ -122,9 +159,12 @@ export async function processImage(
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
 
-      // Apply filters
-      const { brightness, contrast, saturation, grayscale, sepia, blur, hueRotate } = settings.filters;
+      const { brightness = 100, contrast = 100, saturation = 100, grayscale = 0, sepia = 0, blur = 0, hueRotate = 0 } = settings.filters || {};
       ctx.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%) grayscale(${grayscale}%) sepia(${sepia}%) blur(${blur}px) hue-rotate(${hueRotate}deg)`;
+
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate(radians);
+      ctx.scale(flipHorizontal ? -1 : 1, flipVertical ? -1 : 1);
 
       if (aspectRatio !== null && settings.maintainAspectRatio) {
         const originalRatio = originalDimensions.width / originalDimensions.height;
@@ -135,7 +175,7 @@ export async function processImage(
         if (originalRatio > targetRatio) {
           sWidth = originalDimensions.height * targetRatio;
           sx = (originalDimensions.width - sWidth) / 2;
-        } else {
+        } else if (targetRatio > 0) {
           sHeight = originalDimensions.width / targetRatio;
           sy = (originalDimensions.height - sHeight) / 2;
         }
@@ -143,10 +183,10 @@ export async function processImage(
         ctx.drawImage(
           img,
           sx, sy, sWidth, sHeight,
-          0, 0, targetDimensions.width, targetDimensions.height
+          -targetDimensions.width / 2, -targetDimensions.height / 2, targetDimensions.width, targetDimensions.height
         );
       } else {
-        ctx.drawImage(img, 0, 0, targetDimensions.width, targetDimensions.height);
+        ctx.drawImage(img, -targetDimensions.width / 2, -targetDimensions.height / 2, targetDimensions.width, targetDimensions.height);
       }
 
       const mimeType = `image/${settings.format}`;
@@ -164,8 +204,12 @@ export async function processImage(
         quality
       );
     };
-    img.onerror = () => reject(new Error('Failed to load image'));
-    img.src = URL.createObjectURL(originalFile);
+    img.onerror = () => {
+      URL.revokeObjectURL(blobUrl);
+      signal?.removeEventListener('abort', abortHandler);
+      reject(new Error('Failed to load image'));
+    };
+    img.src = blobUrl;
   });
 }
 
@@ -184,6 +228,28 @@ export async function createProcessedImage(file: File): Promise<ProcessedImage> 
     extractEXIF(file),
   ]);
 
+  const settings: ImageSettings = {
+    width: dimensions.width,
+    height: dimensions.height,
+    maintainAspectRatio: true,
+    quality: 85,
+    format: 'jpeg',
+    dpi: 72,
+    preserveMetadata: true,
+    filters: {
+      brightness: 100,
+      contrast: 100,
+      saturation: 100,
+      grayscale: 0,
+      sepia: 0,
+      blur: 0,
+      hueRotate: 0,
+    },
+    rotation: 0,
+    flipHorizontal: false,
+    flipVertical: false,
+  };
+
   return {
     id: generateId(),
     originalFile: file,
@@ -197,23 +263,8 @@ export async function createProcessedImage(file: File): Promise<ProcessedImage> 
     },
     dimensions,
     exif,
-    settings: {
-      width: dimensions.width,
-      height: dimensions.height,
-      maintainAspectRatio: true,
-      quality: 85,
-      format: 'jpeg',
-      dpi: 72,
-      preserveMetadata: true,
-      filters: {
-        brightness: 100,
-        contrast: 100,
-        saturation: 100,
-        grayscale: 0,
-        sepia: 0,
-        blur: 0,
-        hueRotate: 0,
-      },
-    },
+    settings,
+    history: [{ settings: { ...settings }, timestamp: Date.now(), action: 'Initial' }],
+    historyIndex: 0,
   };
 }

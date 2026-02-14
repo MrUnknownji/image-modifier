@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import {
   Lock,
   Unlock,
@@ -13,6 +13,11 @@ import {
   Sparkles,
   RotateCcw,
   Copy,
+  RotateCw,
+  FlipHorizontal,
+  FlipVertical,
+  MapPin,
+  ShieldCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,6 +35,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Tooltip,
   TooltipContent,
@@ -38,6 +44,7 @@ import {
 import {
   COMMON_ASPECT_RATIOS,
   COMMON_RESOLUTIONS,
+  FILTER_PRESETS,
   type ProcessedImage,
   type ImageSettings,
   type ImageFilters,
@@ -50,53 +57,118 @@ interface ImageSettingsPanelProps {
   hasMultipleImages: boolean;
 }
 
+const DEFAULT_SETTINGS: ImageSettings = {
+  width: 0,
+  height: 0,
+  maintainAspectRatio: true,
+  quality: 85,
+  format: 'jpeg',
+  dpi: 72,
+  preserveMetadata: true,
+  filters: {
+    brightness: 100,
+    contrast: 100,
+    saturation: 100,
+    grayscale: 0,
+    sepia: 0,
+    blur: 0,
+    hueRotate: 0,
+  },
+  rotation: 0,
+  flipHorizontal: false,
+  flipVertical: false,
+};
+
+const DEFAULT_FILTERS: ImageFilters = {
+  brightness: 100,
+  contrast: 100,
+  saturation: 100,
+  grayscale: 0,
+  sepia: 0,
+  blur: 0,
+  hueRotate: 0,
+};
+
+interface FilterSliderProps {
+  label: string;
+  value: number;
+  defaultValue: number;
+  min: number;
+  max: number;
+  step?: number;
+  unit?: string;
+  onChange: (value: number) => void;
+  onReset: () => void;
+}
+
+function FilterSlider({ label, value, defaultValue, min, max, step = 1, unit = '%', onChange, onReset }: FilterSliderProps) {
+  const handleInputChange = useCallback((inputValue: string) => {
+    const parsed = parseInt(inputValue) || 0;
+    const clamped = Math.max(min, Math.min(max, parsed));
+    onChange(clamped);
+  }, [min, max, onChange]);
+
+  const isModified = value !== defaultValue;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label className="text-xs">{label}</Label>
+        <div className="flex items-center gap-1.5">
+          <Input
+            type="number"
+            value={value}
+            onChange={(e) => handleInputChange(e.target.value)}
+            className="h-6 w-14 text-xs text-right px-1.5"
+            min={min}
+            max={max}
+          />
+          <span className="text-xs text-muted-foreground w-4">{unit}</span>
+          {isModified && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={onReset}
+                  className="h-5 w-5 p-0 hover:bg-muted"
+                >
+                  <RotateCcw className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Reset to default</TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+      </div>
+      <Slider
+        value={[value]}
+        onValueChange={([val]) => onChange(val)}
+        min={min}
+        max={max}
+        step={step}
+        className="w-full"
+      />
+    </div>
+  );
+}
+
 export function ImageSettingsPanel({
   image,
   onSettingsChange,
   onApplyToAll,
   hasMultipleImages,
 }: ImageSettingsPanelProps) {
-  const [settings, setSettings] = useState<ImageSettings>(
-    image?.settings || {
-      width: 0,
-      height: 0,
-      maintainAspectRatio: true,
-      quality: 85,
-      format: 'jpeg',
-      dpi: 72,
-      preserveMetadata: true,
-      filters: {
-        brightness: 100,
-        contrast: 100,
-        saturation: 100,
-        grayscale: 0,
-        sepia: 0,
-        blur: 0,
-        hueRotate: 0,
-      },
-    }
-  );
   const [aspectRatio, setAspectRatio] = useState<number | null>(null);
   const [lockRatio, setLockRatio] = useState(true);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Sync settings when image changes
-  useEffect(() => {
-    if (image) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSettings(image.settings);
-    }
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [image?.id]);
+  
+  const settings = image?.settings ?? DEFAULT_SETTINGS;
 
   const updateSettings = (updates: Partial<ImageSettings>) => {
+    if (!image) return;
+    
     const newSettings = { ...settings, ...updates };
-    setSettings(newSettings);
     
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
@@ -108,8 +180,8 @@ export function ImageSettingsPanel({
   };
 
   const handleWidthChange = (value: string) => {
-    const width = parseInt(value) || 0;
-    if (lockRatio && settings.maintainAspectRatio && image) {
+    const width = Math.max(1, Math.min(16384, parseInt(value) || 0));
+    if (lockRatio && settings.maintainAspectRatio && image && image.dimensions.width > 0) {
       const ratio = image.dimensions.height / image.dimensions.width;
       updateSettings({ width, height: Math.round(width * ratio) });
     } else {
@@ -118,8 +190,8 @@ export function ImageSettingsPanel({
   };
 
   const handleHeightChange = (value: string) => {
-    const height = parseInt(value) || 0;
-    if (lockRatio && settings.maintainAspectRatio && image) {
+    const height = Math.max(1, Math.min(16384, parseInt(value) || 0));
+    if (lockRatio && settings.maintainAspectRatio && image && image.dimensions.height > 0) {
       const ratio = image.dimensions.width / image.dimensions.height;
       updateSettings({ height, width: Math.round(height * ratio) });
     } else {
@@ -131,7 +203,7 @@ export function ImageSettingsPanel({
     const ratio = value === 'null' ? null : parseFloat(value);
     setAspectRatio(ratio);
     
-    if (ratio !== null && image) {
+    if (ratio !== null && ratio > 0 && image) {
       const currentWidth = settings.width || image.dimensions.width;
       const newHeight = Math.round(currentWidth / ratio);
       updateSettings({ height: newHeight });
@@ -162,18 +234,25 @@ export function ImageSettingsPanel({
     });
   };
 
-  const resetFilters = () => {
+  const handleFilterReset = (key: keyof ImageFilters) => {
+    if (!settings.filters) return;
     updateSettings({
       filters: {
-        brightness: 100,
-        contrast: 100,
-        saturation: 100,
-        grayscale: 0,
-        sepia: 0,
-        blur: 0,
-        hueRotate: 0,
+        ...settings.filters,
+        [key]: DEFAULT_FILTERS[key],
       },
     });
+  };
+
+  const handlePresetChange = (presetName: string) => {
+    const preset = FILTER_PRESETS.find(p => p.name === presetName);
+    if (preset) {
+      updateSettings({ filters: { ...preset.filters } });
+    }
+  };
+
+  const resetFilters = () => {
+    updateSettings({ filters: { ...DEFAULT_FILTERS } });
   };
 
   const resetToOriginal = () => {
@@ -181,10 +260,42 @@ export function ImageSettingsPanel({
       updateSettings({
         width: image.dimensions.width,
         height: image.dimensions.height,
+        rotation: 0,
+        flipHorizontal: false,
+        flipVertical: false,
       });
       setAspectRatio(null);
     }
   };
+
+  const handleRotate = () => {
+    const newRotation = ((settings.rotation || 0) + 90) % 360;
+    updateSettings({ rotation: newRotation });
+  };
+
+  const handleFlipHorizontal = () => {
+    updateSettings({ flipHorizontal: !settings.flipHorizontal });
+  };
+
+  const handleFlipVertical = () => {
+    updateSettings({ flipVertical: !settings.flipVertical });
+  };
+
+  const handleStripExif = () => {
+    updateSettings({ preserveMetadata: false });
+  };
+
+  const handleQualityChange = (value: string) => {
+    const quality = Math.max(1, Math.min(100, parseInt(value) || 85));
+    updateSettings({ quality });
+  };
+
+  const handleDpiChange = (value: string) => {
+    const dpi = Math.max(72, Math.min(600, parseInt(value) || 72));
+    updateSettings({ dpi });
+  };
+
+  const hasGPS = image?.exif?.GPSLatitude && image?.exif?.GPSLongitude;
 
   if (!image) {
     return (
@@ -201,7 +312,7 @@ export function ImageSettingsPanel({
   }
 
   return (
-    <Card className="border-border/60">
+    <Card className="border-border/60 min-w-0">
       <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -221,7 +332,7 @@ export function ImageSettingsPanel({
           )}
         </div>
       </CardHeader>
-      <CardContent className="pt-0">
+      <CardContent className="pt-0 min-w-0">
         <Tabs defaultValue="dimensions" className="space-y-4">
           <TabsList className="grid w-full grid-cols-4 h-9">
             <TabsTrigger value="dimensions" className="text-xs gap-1.5">
@@ -243,7 +354,6 @@ export function ImageSettingsPanel({
           </TabsList>
 
           <TabsContent value="dimensions" className="space-y-4 mt-2">
-            {/* Quick Resolution */}
             <div className="space-y-2">
               <Label className="text-xs font-medium">Quick Resolution</Label>
               <Select onValueChange={handleResolutionChange}>
@@ -262,7 +372,6 @@ export function ImageSettingsPanel({
 
             <Separator />
 
-            {/* Aspect Ratio */}
             <div className="space-y-2">
               <Label className="text-xs font-medium">Aspect Ratio</Label>
               <Select
@@ -288,7 +397,61 @@ export function ImageSettingsPanel({
 
             <Separator />
 
-            {/* Dimensions */}
+            <div className="space-y-2">
+              <Label className="text-xs font-medium">Transform</Label>
+              <div className="flex gap-1.5">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRotate}
+                      className="flex-1 h-8 text-xs gap-1.5"
+                    >
+                      <RotateCw className="h-3.5 w-3.5" />
+                      Rotate
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Rotate 90° (Current: {settings.rotation || 0}°)</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={settings.flipHorizontal ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={handleFlipHorizontal}
+                      className="flex-1 h-8 text-xs gap-1.5"
+                    >
+                      <FlipHorizontal className="h-3.5 w-3.5" />
+                      Flip H
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Flip horizontally</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={settings.flipVertical ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={handleFlipVertical}
+                      className="flex-1 h-8 text-xs gap-1.5"
+                    >
+                      <FlipVertical className="h-3.5 w-3.5" />
+                      Flip V
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Flip vertically</TooltipContent>
+                </Tooltip>
+              </div>
+              {(settings.rotation !== 0 || settings.flipHorizontal || settings.flipVertical) && (
+                <p className="text-[10px] text-muted-foreground">
+                  Rotation: {settings.rotation}° • H-Flip: {settings.flipHorizontal ? 'Yes' : 'No'} • V-Flip: {settings.flipVertical ? 'Yes' : 'No'}
+                </p>
+              )}
+            </div>
+
+            <Separator />
+
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-medium">Dimensions (px)</Label>
@@ -337,6 +500,8 @@ export function ImageSettingsPanel({
                     onChange={(e) => handleWidthChange(e.target.value)}
                     placeholder={image.dimensions.width.toString()}
                     className="h-9 text-sm"
+                    min={1}
+                    max={16384}
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -347,6 +512,8 @@ export function ImageSettingsPanel({
                     onChange={(e) => handleHeightChange(e.target.value)}
                     placeholder={image.dimensions.height.toString()}
                     className="h-9 text-sm"
+                    min={1}
+                    max={16384}
                   />
                 </div>
               </div>
@@ -365,7 +532,6 @@ export function ImageSettingsPanel({
               </div>
             </div>
 
-            {/* Original Info */}
             <div className="pt-2">
               <Badge variant="secondary" className="text-[10px] font-normal">
                 Original: {image.dimensions.width} × {image.dimensions.height}
@@ -374,135 +540,110 @@ export function ImageSettingsPanel({
           </TabsContent>
 
           <TabsContent value="filters" className="space-y-4 mt-2">
+            <div className="space-y-2">
+              <Label className="text-xs font-medium">Filter Presets</Label>
+              <Select onValueChange={handlePresetChange}>
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue placeholder="Select a preset..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {FILTER_PRESETS.map((preset) => (
+                    <SelectItem key={preset.name} value={preset.name} className="text-sm">
+                      {preset.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Separator />
+
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-muted-foreground">
                 Adjust image filters and effects
               </span>
               <Button variant="ghost" size="sm" onClick={resetFilters} className="h-7 text-xs gap-1.5">
                 <RotateCcw className="h-3 w-3" />
-                Reset
+                Reset All
               </Button>
             </div>
 
-            <Separator />
-
             <div className="space-y-4">
-              {/* Brightness */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs">Brightness</Label>
-                  <span className="text-xs text-muted-foreground font-mono">{settings.filters?.brightness}%</span>
-                </div>
-                <Slider
-                  value={[settings.filters?.brightness || 100]}
-                  onValueChange={([val]) => handleFilterChange('brightness', val)}
-                  min={0}
-                  max={200}
-                  step={1}
-                  className="w-full"
-                />
-              </div>
+              <FilterSlider
+                label="Brightness"
+                value={settings.filters?.brightness ?? 100}
+                defaultValue={100}
+                min={0}
+                max={200}
+                onChange={(v) => handleFilterChange('brightness', v)}
+                onReset={() => handleFilterReset('brightness')}
+              />
 
-              {/* Contrast */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs">Contrast</Label>
-                  <span className="text-xs text-muted-foreground font-mono">{settings.filters?.contrast}%</span>
-                </div>
-                <Slider
-                  value={[settings.filters?.contrast || 100]}
-                  onValueChange={([val]) => handleFilterChange('contrast', val)}
-                  min={0}
-                  max={200}
-                  step={1}
-                  className="w-full"
-                />
-              </div>
+              <FilterSlider
+                label="Contrast"
+                value={settings.filters?.contrast ?? 100}
+                defaultValue={100}
+                min={0}
+                max={200}
+                onChange={(v) => handleFilterChange('contrast', v)}
+                onReset={() => handleFilterReset('contrast')}
+              />
 
-              {/* Saturation */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs">Saturation</Label>
-                  <span className="text-xs text-muted-foreground font-mono">{settings.filters?.saturation}%</span>
-                </div>
-                <Slider
-                  value={[settings.filters?.saturation || 100]}
-                  onValueChange={([val]) => handleFilterChange('saturation', val)}
-                  min={0}
-                  max={200}
-                  step={1}
-                  className="w-full"
-                />
-              </div>
+              <FilterSlider
+                label="Saturation"
+                value={settings.filters?.saturation ?? 100}
+                defaultValue={100}
+                min={0}
+                max={200}
+                onChange={(v) => handleFilterChange('saturation', v)}
+                onReset={() => handleFilterReset('saturation')}
+              />
 
-              {/* Grayscale */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs">Grayscale</Label>
-                  <span className="text-xs text-muted-foreground font-mono">{settings.filters?.grayscale}%</span>
-                </div>
-                <Slider
-                  value={[settings.filters?.grayscale || 0]}
-                  onValueChange={([val]) => handleFilterChange('grayscale', val)}
-                  min={0}
-                  max={100}
-                  step={1}
-                  className="w-full"
-                />
-              </div>
+              <FilterSlider
+                label="Grayscale"
+                value={settings.filters?.grayscale ?? 0}
+                defaultValue={0}
+                min={0}
+                max={100}
+                onChange={(v) => handleFilterChange('grayscale', v)}
+                onReset={() => handleFilterReset('grayscale')}
+              />
 
-              {/* Sepia */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs">Sepia</Label>
-                  <span className="text-xs text-muted-foreground font-mono">{settings.filters?.sepia}%</span>
-                </div>
-                <Slider
-                  value={[settings.filters?.sepia || 0]}
-                  onValueChange={([val]) => handleFilterChange('sepia', val)}
-                  min={0}
-                  max={100}
-                  step={1}
-                  className="w-full"
-                />
-              </div>
+              <FilterSlider
+                label="Sepia"
+                value={settings.filters?.sepia ?? 0}
+                defaultValue={0}
+                min={0}
+                max={100}
+                onChange={(v) => handleFilterChange('sepia', v)}
+                onReset={() => handleFilterReset('sepia')}
+              />
 
-              {/* Blur */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs">Blur</Label>
-                  <span className="text-xs text-muted-foreground font-mono">{settings.filters?.blur}px</span>
-                </div>
-                <Slider
-                  value={[settings.filters?.blur || 0]}
-                  onValueChange={([val]) => handleFilterChange('blur', val)}
-                  min={0}
-                  max={20}
-                  step={1}
-                  className="w-full"
-                />
-              </div>
+              <FilterSlider
+                label="Blur"
+                value={settings.filters?.blur ?? 0}
+                defaultValue={0}
+                min={0}
+                max={20}
+                unit="px"
+                onChange={(v) => handleFilterChange('blur', v)}
+                onReset={() => handleFilterReset('blur')}
+              />
 
-              {/* Hue Rotate */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs">Hue Rotate</Label>
-                  <span className="text-xs text-muted-foreground font-mono">{settings.filters?.hueRotate}°</span>
-                </div>
-                <Slider
-                  value={[settings.filters?.hueRotate || 0]}
-                  onValueChange={([val]) => handleFilterChange('hueRotate', val)}
-                  min={0}
-                  max={360}
-                  step={1}
-                  className="w-full"
-                />
-              </div>
+              <FilterSlider
+                label="Hue Rotate"
+                value={settings.filters?.hueRotate ?? 0}
+                defaultValue={0}
+                min={0}
+                max={360}
+                unit="°"
+                onChange={(v) => handleFilterChange('hueRotate', v)}
+                onReset={() => handleFilterReset('hueRotate')}
+              />
             </div>
           </TabsContent>
 
           <TabsContent value="quality" className="space-y-4 mt-2">
-            {/* Format */}
             <div className="space-y-2">
               <Label className="text-xs font-medium">Output Format</Label>
               <Select
@@ -524,14 +665,31 @@ export function ImageSettingsPanel({
 
             <Separator />
 
-            {/* Quality */}
             {settings.format !== 'png' && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label className="text-xs font-medium">Quality</Label>
-                  <span className="text-xs text-muted-foreground font-mono">
-                    {settings.quality}%
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      type="number"
+                      value={settings.quality}
+                      onChange={(e) => handleQualityChange(e.target.value)}
+                      className="h-6 w-14 text-xs text-right px-1.5"
+                      min={1}
+                      max={100}
+                    />
+                    <span className="text-xs text-muted-foreground">%</span>
+                    {settings.quality !== 85 && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => updateSettings({ quality: 85 })}
+                        className="h-5 w-5 p-0 hover:bg-muted"
+                      >
+                        <RotateCcw className="h-3 w-3 text-muted-foreground" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
                 <Slider
                   value={[settings.quality]}
@@ -549,13 +707,30 @@ export function ImageSettingsPanel({
 
             <Separator />
 
-            {/* DPI */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-medium">DPI (Resolution)</Label>
-                <span className="text-xs text-muted-foreground font-mono">
-                  {settings.dpi} DPI
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="number"
+                    value={settings.dpi}
+                    onChange={(e) => handleDpiChange(e.target.value)}
+                    className="h-6 w-14 text-xs text-right px-1.5"
+                    min={72}
+                    max={600}
+                  />
+                  <span className="text-xs text-muted-foreground">DPI</span>
+                  {settings.dpi !== 72 && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => updateSettings({ dpi: 72 })}
+                      className="h-5 w-5 p-0 hover:bg-muted"
+                    >
+                      <RotateCcw className="h-3 w-3 text-muted-foreground" />
+                    </Button>
+                  )}
+                </div>
               </div>
               <Slider
                 value={[settings.dpi]}
@@ -582,6 +757,25 @@ export function ImageSettingsPanel({
           </TabsContent>
 
           <TabsContent value="metadata" className="space-y-4 mt-2">
+            {hasGPS && settings.preserveMetadata && (
+              <Alert className="border-amber-500/50 bg-amber-500/10">
+                <MapPin className="h-4 w-4 text-amber-500" />
+                <AlertDescription className="text-xs">
+                  <span className="font-medium">GPS data detected!</span>
+                  <br />
+                  This image contains location data. Consider removing metadata before sharing.
+                  <Button
+                    variant="link"
+                    size="sm"
+                    onClick={handleStripExif}
+                    className="h-auto p-0 ml-1 text-amber-600 dark:text-amber-400"
+                  >
+                    Remove metadata
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
+
             <div className="space-y-3">
               <div className="flex items-start gap-2">
                 <Checkbox
@@ -601,6 +795,13 @@ export function ImageSettingsPanel({
                 </div>
               </div>
 
+              {!settings.preserveMetadata && (
+                <div className="flex items-center gap-2 p-2 bg-green-500/10 rounded-md border border-green-500/30">
+                  <ShieldCheck className="h-4 w-4 text-green-500" />
+                  <span className="text-xs text-green-600 dark:text-green-400">Metadata will be removed from output</span>
+                </div>
+              )}
+
               {image.exif && Object.keys(image.exif).length > 0 && (
                 <div className="mt-4 p-3 bg-muted/50 rounded-lg border border-border/60">
                   <p className="text-xs font-medium mb-2.5 flex items-center gap-1.5">
@@ -614,8 +815,11 @@ export function ImageSettingsPanel({
                     {image.exif.DateTimeOriginal && (
                       <p><span className="text-foreground/70">Date:</span> {new Date(image.exif.DateTimeOriginal).toLocaleString()}</p>
                     )}
-                    {image.exif.GPSLatitude && image.exif.GPSLongitude && (
-                      <p><span className="text-foreground/70">GPS:</span> Available</p>
+                    {hasGPS && (
+                      <p className="flex items-center gap-1">
+                        <MapPin className="h-3 w-3 text-amber-500" />
+                        <span className="text-foreground/70">GPS:</span> Location data detected
+                      </p>
                     )}
                     {image.exif.FNumber && (
                       <p><span className="text-foreground/70">Aperture:</span> f/{image.exif.FNumber}</p>
