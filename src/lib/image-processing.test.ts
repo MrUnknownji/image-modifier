@@ -1,7 +1,8 @@
-import { describe, it } from 'node:test';
+import { describe, it, mock, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { calculateDimensions } from './image-processing.ts';
+import { calculateDimensions, extractEXIF } from './image-processing.ts';
 import type { ImageSettings } from '../types/image.ts';
+import exifr from 'exifr';
 
 const DEFAULT_SETTINGS: ImageSettings = {
   width: 0,
@@ -145,5 +146,46 @@ describe('calculateDimensions', () => {
      const settingsEmpty = { ...DEFAULT_SETTINGS };
      const resultEmpty = calculateDimensions(0, 0, settingsEmpty, null);
      assert.deepStrictEqual(resultEmpty, { width: 0, height: 0 });
+  });
+});
+
+describe('extractEXIF', () => {
+  afterEach(() => {
+    mock.reset();
+  });
+
+  it('should return EXIF data on success', async () => {
+    const mockData = { Make: 'Test Make', Model: 'Test Model' };
+    mock.method(exifr, 'parse', async () => {
+      return mockData;
+    });
+
+    // We can cast file to any or File since we are mocking exifr.parse which consumes it
+    const file = new File([''], 'test.jpg', { type: 'image/jpeg' });
+    const result = await extractEXIF(file);
+
+    assert.deepStrictEqual(result, mockData);
+  });
+
+  it('should return null when exifr throws an error', async () => {
+    mock.method(exifr, 'parse', async () => {
+      throw new Error('Parse error');
+    });
+
+    const file = new File([''], 'test.jpg', { type: 'image/jpeg' });
+    const result = await extractEXIF(file);
+
+    assert.strictEqual(result, null);
+  });
+
+  it('should return null when exifr returns null/undefined', async () => {
+     mock.method(exifr, 'parse', async () => {
+      return null;
+    });
+
+    const file = new File([''], 'test.jpg', { type: 'image/jpeg' });
+    const result = await extractEXIF(file);
+
+    assert.strictEqual(result, null);
   });
 });
