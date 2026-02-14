@@ -1,6 +1,6 @@
-import { describe, it } from 'node:test';
+import { describe, it, before, after, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert';
-import { calculateDimensions } from './image-processing.ts';
+import { calculateDimensions, getImageDimensions } from './image-processing.ts';
 import type { ImageSettings } from '../types/image.ts';
 
 const DEFAULT_SETTINGS: ImageSettings = {
@@ -145,5 +145,100 @@ describe('calculateDimensions', () => {
      const settingsEmpty = { ...DEFAULT_SETTINGS };
      const resultEmpty = calculateDimensions(0, 0, settingsEmpty, null);
      assert.deepStrictEqual(resultEmpty, { width: 0, height: 0 });
+  });
+});
+
+describe('getImageDimensions', () => {
+  let originalImage: any;
+  let originalCreateObjectURL: any;
+  let originalRevokeObjectURL: any;
+
+  let mockCreateObjectURL: any;
+  let mockRevokeObjectURL: any;
+
+  before(() => {
+    originalImage = globalThis.Image;
+    originalCreateObjectURL = globalThis.URL.createObjectURL;
+    originalRevokeObjectURL = globalThis.URL.revokeObjectURL;
+  });
+
+  after(() => {
+    globalThis.Image = originalImage;
+    globalThis.URL.createObjectURL = originalCreateObjectURL;
+    globalThis.URL.revokeObjectURL = originalRevokeObjectURL;
+  });
+
+  beforeEach(() => {
+    mockCreateObjectURL = mock.fn(() => 'blob:mock');
+    mockRevokeObjectURL = mock.fn();
+
+    // Mock URL methods
+    // @ts-ignore
+    globalThis.URL.createObjectURL = mockCreateObjectURL;
+    // @ts-ignore
+    globalThis.URL.revokeObjectURL = mockRevokeObjectURL;
+
+    // Mock Image
+    class MockImage {
+      width = 0;
+      height = 0;
+      onload: (() => void) | null = null;
+      onerror: ((err: any) => void) | null = null;
+      _src = '';
+
+      set src(value: string) {
+        this._src = value;
+        // Simulate async behavior
+        setImmediate(() => {
+            if (this._src.includes('error')) {
+                if (this.onerror) this.onerror(new Error('Failed to load'));
+            } else {
+                this.width = 1920;
+                this.height = 1080;
+                if (this.onload) this.onload();
+            }
+        });
+      }
+
+      get src() {
+          return this._src;
+      }
+    }
+
+    // @ts-ignore
+    globalThis.Image = MockImage;
+  });
+
+  afterEach(() => {
+    // Restore mocks if needed, or just let beforeEach handle it
+    mockCreateObjectURL.mock.restore();
+    mockRevokeObjectURL.mock.restore();
+  });
+
+  it('should resolve with dimensions when image loads successfully', async () => {
+    const file = new File([''], 'test.jpg', { type: 'image/jpeg' });
+
+    const dimensions = await getImageDimensions(file);
+
+    assert.deepStrictEqual(dimensions, { width: 1920, height: 1080 });
+    assert.strictEqual(mockCreateObjectURL.mock.calls.length, 1);
+    assert.strictEqual(mockRevokeObjectURL.mock.calls.length, 1);
+  });
+
+  it('should reject with error when image fails to load', async () => {
+    const file = new File([''], 'error.jpg', { type: 'image/jpeg' });
+
+    // Override createObjectURL for this test
+    // @ts-ignore
+    globalThis.URL.createObjectURL = mock.fn(() => 'blob:error');
+
+    await assert.rejects(
+      async () => {
+        await getImageDimensions(file);
+      },
+      {
+        message: 'Failed to load image',
+      }
+    );
   });
 });
