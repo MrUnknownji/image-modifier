@@ -178,16 +178,20 @@ function ImageModifierApp() {
       try {
         const updatedImage = { ...selectedImage, settings };
         const blob = await processImage(updatedImage, aspectRatio, abortControllerRef.current.signal);
-        setProcessedBlob(blob);
         
-        addHistoryEntry(selectedId, settings, 'Settings changed');
+        if (!abortControllerRef.current.signal.aborted) {
+          setProcessedBlob(blob);
+          addHistoryEntry(selectedId, settings, 'Settings changed');
+        }
       } catch (error) {
-        if ((error as Error).message !== 'Processing aborted') {
+        if ((error as Error).message !== 'Processing aborted' && !abortControllerRef.current.signal.aborted) {
           console.error('Failed to process image:', error);
           toast.error('Failed to process image');
         }
       } finally {
-        setIsProcessing(false);
+        if (!abortControllerRef.current.signal.aborted) {
+          setIsProcessing(false);
+        }
       }
     },
     [selectedImage, selectedId, aspectRatio, addHistoryEntry]
