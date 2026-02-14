@@ -31,6 +31,7 @@ import {
   processImage,
   downloadImage,
 } from '@/lib/image-processing';
+import { pLimit } from '@/lib/concurrency';
 
 import type {
   ProcessedImage,
@@ -102,33 +103,37 @@ function ImageModifierApp() {
 
   const handleImagesAdd = useCallback(
     async (files: FileList) => {
-      const newImages: ProcessedImage[] = [];
-      
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        if (!file.type.startsWith('image/')) {
-          toast.error(`Skipped ${file.name}: Not an image file`);
-          continue;
-        }
-        
-        if (file.size > MAX_FILE_SIZE) {
-          toast.error(`Skipped ${file.name}: File too large (max 100MB)`);
-          continue;
-        }
-        
-        try {
-          const processedImage = await createProcessedImage(file);
-          
-          if (processedImage.dimensions.width > MAX_DIMENSION || processedImage.dimensions.height > MAX_DIMENSION) {
-            toast.warning(`${file.name}: Very large image may cause performance issues`);
+      const limit = pLimit(5);
+      const promises = Array.from(files).map((file) =>
+        limit(async (): Promise<ProcessedImage | null> => {
+          if (!file.type.startsWith('image/')) {
+            toast.error(`Skipped ${file.name}: Not an image file`);
+            return null;
           }
           
-          newImages.push(processedImage);
-        } catch (error) {
-          console.error('Failed to process image:', error);
-          toast.error(`Failed to load ${file.name}`);
-        }
-      }
+          if (file.size > MAX_FILE_SIZE) {
+            toast.error(`Skipped ${file.name}: File too large (max 100MB)`);
+            return null;
+          }
+          
+          try {
+            const processedImage = await createProcessedImage(file);
+
+            if (processedImage.dimensions.width > MAX_DIMENSION || processedImage.dimensions.height > MAX_DIMENSION) {
+              toast.warning(`${file.name}: Very large image may cause performance issues`);
+            }
+
+            return processedImage;
+          } catch (error) {
+            console.error('Failed to process image:', error);
+            toast.error(`Failed to load ${file.name}`);
+            return null;
+          }
+        })
+      );
+
+      const results = await Promise.all(promises);
+      const newImages = results.filter((img): img is ProcessedImage => img !== null);
 
       if (newImages.length > 0) {
         setImages((prev) => [...prev, ...newImages]);
