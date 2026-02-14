@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { calculateDimensions } from './image-processing.ts';
+import { calculateDimensions, formatFileSize } from './image-processing.ts';
 import type { ImageSettings } from '../types/image.ts';
 
 const DEFAULT_SETTINGS: ImageSettings = {
@@ -145,5 +145,36 @@ describe('calculateDimensions', () => {
      const settingsEmpty = { ...DEFAULT_SETTINGS };
      const resultEmpty = calculateDimensions(0, 0, settingsEmpty, null);
      assert.deepStrictEqual(resultEmpty, { width: 0, height: 0 });
+  });
+});
+
+describe('formatFileSize', () => {
+  it('should return "0 Bytes" for 0 bytes', () => {
+    assert.strictEqual(formatFileSize(0), '0 Bytes');
+  });
+
+  it('should format Bytes correctly', () => {
+    assert.strictEqual(formatFileSize(500), '500 Bytes');
+    assert.strictEqual(formatFileSize(1023), '1023 Bytes');
+  });
+
+  it('should format KB correctly', () => {
+    assert.strictEqual(formatFileSize(1024), '1 KB');
+    assert.strictEqual(formatFileSize(1500), '1.46 KB'); // 1500 / 1024 = 1.4648...
+    assert.strictEqual(formatFileSize(2048), '2 KB');
+  });
+
+  it('should format MB correctly', () => {
+    assert.strictEqual(formatFileSize(1048576), '1 MB'); // 1024 * 1024
+    assert.strictEqual(formatFileSize(1572864), '1.5 MB'); // 1.5 * 1024 * 1024
+  });
+
+  it('should format GB correctly', () => {
+    assert.strictEqual(formatFileSize(1073741824), '1 GB'); // 1024^3
+    assert.strictEqual(formatFileSize(1610612736), '1.5 GB'); // 1.5 * 1024^3
+  });
+
+  it('should format TB correctly', () => {
+    assert.strictEqual(formatFileSize(1099511627776), '1 TB'); // 1024^4
   });
 });
