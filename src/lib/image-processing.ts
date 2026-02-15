@@ -1,4 +1,4 @@
-import type { ImageDimensions, ImageSettings, EXIFData, ProcessedImage } from '@/types/image';
+import type { ImageDimensions, ImageSettings, EXIFData, ProcessedImage } from '../types/image';
 import exifr from 'exifr';
 
 export function generateId(): string {
@@ -130,19 +130,33 @@ export async function processImage(
     }
 
     const img = new Image();
-    const blobUrl = URL.createObjectURL(originalFile);
+    let blobUrl: string;
+    let shouldRevoke = false;
+
+    if (image.originalUrl) {
+      blobUrl = image.originalUrl;
+    } else {
+      blobUrl = URL.createObjectURL(originalFile);
+      shouldRevoke = true;
+    }
     
-    const abortHandler = () => {
-      URL.revokeObjectURL(blobUrl);
+    function cleanup() {
+      if (shouldRevoke) {
+        URL.revokeObjectURL(blobUrl);
+      }
+      signal?.removeEventListener('abort', abortHandler);
+    }
+
+    function abortHandler() {
+      cleanup();
       img.src = '';
       reject(new Error('Processing aborted'));
-    };
+    }
     
     signal?.addEventListener('abort', abortHandler);
     
     img.onload = () => {
-      URL.revokeObjectURL(blobUrl);
-      signal?.removeEventListener('abort', abortHandler);
+      cleanup();
       
       if (signal?.aborted) {
         reject(new Error('Processing aborted'));
@@ -216,8 +230,7 @@ export async function processImage(
       );
     };
     img.onerror = () => {
-      URL.revokeObjectURL(blobUrl);
-      signal?.removeEventListener('abort', abortHandler);
+      cleanup();
       reject(new Error('Failed to load image'));
     };
     img.src = blobUrl;
