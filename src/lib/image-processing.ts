@@ -2,7 +2,7 @@ import type { ImageDimensions, ImageSettings, EXIFData, ProcessedImage } from '@
 import exifr from 'exifr';
 
 export function generateId(): string {
-  return `${Date.now()}-${crypto.randomUUID?.() ?? Math.random().toString(36).substr(2, 9)}`;
+  return `${Date.now()}-${crypto.randomUUID()}`;
 }
 
 export function formatFileSize(bytes: number): string {
