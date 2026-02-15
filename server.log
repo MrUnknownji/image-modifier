@@ -1,0 +1,15 @@
+
+> image-modifier@0.1.0 dev
+> next dev
+
+▲ Next.js 16.1.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.0.2:3000
+
+✓ Starting...
+✓ Ready in 1039ms
+○ Compiling / ...
+Couldn't load fs
+Couldn't load zlib
+ GET / 200 in 6.1s (compile: 5.5s, render: 551ms)
+ GET / 200 in 130ms (compile: 7ms, render: 123ms)
