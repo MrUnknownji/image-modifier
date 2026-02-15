@@ -1,7 +1,7 @@
-import { describe, it } from 'node:test';
+import { describe, it, before, after, beforeEach, mock } from 'node:test';
 import assert from 'node:assert';
-import { calculateDimensions, formatFileSize } from './image-processing.ts';
-import type { ImageSettings } from '../types/image.ts';
+import { calculateDimensions, formatFileSize, processImage } from './image-processing.ts';
+import type { ImageSettings, ProcessedImage } from '../types/image.ts';
 
 const DEFAULT_SETTINGS: ImageSettings = {
   width: 0,
@@ -20,6 +20,9 @@ const DEFAULT_SETTINGS: ImageSettings = {
     blur: 0,
     hueRotate: 0,
   },
+  rotation: 0,
+  flipHorizontal: false,
+  flipVertical: false,
 };
 
 describe('calculateDimensions', () => {
@@ -176,5 +179,278 @@ describe('formatFileSize', () => {
 
   it('should format TB correctly', () => {
     assert.strictEqual(formatFileSize(1099511627776), '1 TB'); // 1024^4
+  });
+});
+
+describe('processImage', () => {
+  let originalURL: typeof URL;
+  let originalImage: typeof Image;
+  let originalDocument: typeof document;
+
+  // Mocks
+  let mockCreateObjectURL: any;
+  let mockRevokeObjectURL: any;
+  let mockDrawImage: any;
+  let mockToBlob: any;
+  let mockGetContext: any;
+  let mockCreateElement: any;
+  let mockContext: any;
+
+  before(() => {
+    originalURL = global.URL;
+    originalImage = global.Image;
+    originalDocument = global.document;
+
+    // Setup basic mocks
+    mockCreateObjectURL = mock.fn(() => 'blob:mock-url');
+    mockRevokeObjectURL = mock.fn();
+    global.URL = {
+      ...originalURL,
+      createObjectURL: mockCreateObjectURL,
+      revokeObjectURL: mockRevokeObjectURL,
+    } as any;
+
+    // Mock Image
+    global.Image = class MockImage {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      width: number = 100;
+      height: number = 100;
+      _src: string = '';
+
+      set src(value: string) {
+        this._src = value;
+        if (value) {
+            // Simulate async load
+            setImmediate(() => {
+                if (this.src === value) { // Check if still valid (not aborted/cleared)
+                   if (value === 'error') {
+                       if (this.onerror) this.onerror();
+                   } else {
+                       if (this.onload) this.onload();
+                   }
+                }
+            });
+        }
+      }
+      get src() { return this._src; }
+    } as any;
+
+    // Mock Document
+    mockDrawImage = mock.fn();
+    mockToBlob = mock.fn((cb) => cb(new Blob(['mock-blob'], { type: 'image/jpeg' })));
+
+    mockContext = {
+      drawImage: mockDrawImage,
+      translate: mock.fn(),
+      rotate: mock.fn(),
+      scale: mock.fn(),
+      filter: '',
+      imageSmoothingEnabled: false,
+      imageSmoothingQuality: '',
+    };
+
+    mockGetContext = mock.fn(() => mockContext);
+
+    const mockCanvas = {
+      width: 0,
+      height: 0,
+      getContext: mockGetContext,
+      toBlob: mockToBlob,
+    };
+
+    mockCreateElement = mock.fn((tag) => {
+      if (tag === 'canvas') return mockCanvas;
+      return { href: '', download: '', click: mock.fn() };
+    });
+
+    global.document = {
+      ...originalDocument,
+      createElement: mockCreateElement,
+      body: { appendChild: mock.fn(), removeChild: mock.fn() } as any,
+    } as any;
+  });
+
+  after(() => {
+    global.URL = originalURL;
+    global.Image = originalImage;
+    global.document = originalDocument;
+  });
+
+  beforeEach(() => {
+    mockCreateObjectURL.mock.resetCalls();
+    mockRevokeObjectURL.mock.resetCalls();
+    mockDrawImage.mock.resetCalls();
+    mockToBlob.mock.resetCalls();
+    mockGetContext.mock.resetCalls();
+    mockCreateElement.mock.resetCalls();
+
+    // Reset context spies
+    mockContext.translate.mock.resetCalls();
+    mockContext.rotate.mock.resetCalls();
+    mockContext.scale.mock.resetCalls();
+    mockContext.filter = '';
+
+    // Reset implementation
+    mockGetContext.mock.mockImplementation(() => mockContext);
+    mockToBlob.mock.mockImplementation((cb: any) => cb(new Blob(['mock-blob'], { type: 'image/jpeg' })));
+  });
+
+  function createMockProcessedImage(settings: Partial<ImageSettings> = {}): ProcessedImage {
+    return {
+      id: 'test-id',
+      originalFile: new File([''], 'test.jpg', { type: 'image/jpeg' }),
+      originalUrl: 'blob:original',
+      processedUrl: null,
+      metadata: {
+        name: 'test.jpg',
+        type: 'image/jpeg',
+        size: 1024,
+        lastModified: 1234567890,
+      },
+      dimensions: { width: 100, height: 100 },
+      exif: null,
+      settings: {
+        width: 100,
+        height: 100,
+        maintainAspectRatio: true,
+        quality: 85,
+        format: 'jpeg',
+        dpi: 72,
+        preserveMetadata: true,
+        filters: {
+            brightness: 100,
+            contrast: 100,
+            saturation: 100,
+            grayscale: 0,
+            sepia: 0,
+            blur: 0,
+            hueRotate: 0,
+        },
+        rotation: 0,
+        flipHorizontal: false,
+        flipVertical: false,
+        ...settings,
+      },
+      history: [],
+      historyIndex: 0,
+    };
+  }
+
+  it('should process image successfully with default settings', async () => {
+    const image = createMockProcessedImage();
+    const result = await processImage(image, null);
+
+    assert.ok(result instanceof Blob);
+    assert.strictEqual(mockDrawImage.mock.callCount(), 1);
+
+    const calls = mockDrawImage.mock.calls[0].arguments;
+    // arguments: [img, x, y, width, height]
+    // drawImage at -50, -50, 100, 100.
+    assert.strictEqual(calls[1], -50);
+    assert.strictEqual(calls[2], -50);
+    assert.strictEqual(calls[3], 100);
+    assert.strictEqual(calls[4], 100);
+  });
+
+  it('should apply filters correctly', async () => {
+    const filters = {
+        brightness: 110,
+        contrast: 120,
+        saturation: 130,
+        grayscale: 10,
+        sepia: 20,
+        blur: 5,
+        hueRotate: 45,
+    };
+    const image = createMockProcessedImage({ filters });
+
+    await processImage(image, null);
+
+    assert.strictEqual(
+      mockContext.filter,
+      'brightness(110%) contrast(120%) saturate(130%) grayscale(10%) sepia(20%) blur(5px) hue-rotate(45deg)'
+    );
+  });
+
+  it('should apply transformations (rotation/flip)', async () => {
+    const image = createMockProcessedImage({
+        rotation: 90,
+        flipHorizontal: true,
+        flipVertical: true
+    });
+
+    await processImage(image, null);
+
+    assert.strictEqual(mockContext.rotate.mock.callCount(), 1);
+    assert.strictEqual(mockContext.scale.mock.callCount(), 1);
+
+    const rotateArgs = mockContext.rotate.mock.calls[0].arguments;
+    assert.strictEqual(rotateArgs[0], (90 * Math.PI) / 180);
+
+    const scaleArgs = mockContext.scale.mock.calls[0].arguments;
+    assert.strictEqual(scaleArgs[0], -1); // flipHorizontal
+    assert.strictEqual(scaleArgs[1], -1); // flipVertical
+  });
+
+  it('should handle cropping with aspect ratio', async () => {
+    const image = createMockProcessedImage();
+    await processImage(image, 2);
+
+    assert.strictEqual(mockDrawImage.mock.callCount(), 1);
+    const args = mockDrawImage.mock.calls[0].arguments;
+
+    assert.strictEqual(args.length, 9);
+    assert.strictEqual(args[1], 0);   // sx
+    assert.strictEqual(args[2], 25);  // sy
+    assert.strictEqual(args[3], 100); // sWidth
+    assert.strictEqual(args[4], 50);  // sHeight
+    assert.strictEqual(args[5], -50); // dx
+    assert.strictEqual(args[6], -25); // dy
+    assert.strictEqual(args[7], 100); // dWidth
+    assert.strictEqual(args[8], 50);  // dHeight
+  });
+
+  it('should reject when abort signal is triggered before load', async () => {
+    const controller = new AbortController();
+    const image = createMockProcessedImage();
+
+    controller.abort();
+
+    await assert.rejects(
+        processImage(image, null, controller.signal),
+        { message: 'Processing aborted' }
+    );
+  });
+
+  it('should reject when image load fails', async () => {
+    const image = createMockProcessedImage();
+    // Simulate error by setting originalUrl to 'error' which our mock Image interprets
+    image.originalUrl = 'error';
+
+    await assert.rejects(
+        processImage(image, null),
+        { message: 'Failed to load image' }
+    );
+  });
+
+  it('should reject if canvas context cannot be obtained', async () => {
+     mockGetContext.mock.mockImplementation(() => null);
+     const image = createMockProcessedImage();
+
+     await assert.rejects(
+        processImage(image, null),
+        { message: 'Could not get canvas context' }
+     );
+  });
+
+  it('should reject if toBlob fails', async () => {
+     mockToBlob.mock.mockImplementation((cb: any) => cb(null));
+     const image = createMockProcessedImage();
+
+     await assert.rejects(
+        processImage(image, null),
+        { message: 'Failed to create blob' }
+     );
   });
 });
