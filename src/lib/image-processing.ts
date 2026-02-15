@@ -292,3 +292,26 @@ export async function createProcessedImage(file: File): Promise<ProcessedImage> 
     historyIndex: 0,
   };
 }
+
+export function calculateDimensionUpdate(
+  dimension: 'width' | 'height',
+  newValue: number,
+  originalDimensions: { width: number; height: number },
+  maintainRatio: boolean
+): { width?: number; height?: number } {
+  const updates: { width?: number; height?: number } = {
+    [dimension]: newValue
+  };
+
+  if (maintainRatio && originalDimensions.width > 0 && originalDimensions.height > 0) {
+    if (dimension === 'width') {
+      const ratio = originalDimensions.height / originalDimensions.width;
+      updates.height = Math.round(newValue * ratio);
+    } else {
+      const ratio = originalDimensions.width / originalDimensions.height;
+      updates.width = Math.round(newValue * ratio);
+    }
+  }
+
+  return updates;
+}

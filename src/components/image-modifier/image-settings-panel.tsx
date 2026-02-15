@@ -41,10 +41,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { calculateDimensionUpdate } from '@/lib/image-processing';
 import {
   COMMON_ASPECT_RATIOS,
   COMMON_RESOLUTIONS,
   FILTER_PRESETS,
+  MAX_IMAGE_DIMENSION,
   type ProcessedImage,
   type ImageSettings,
   type ImageFilters,
@@ -174,23 +176,17 @@ export function ImageSettingsPanel({
     }, 300);
   };
 
-  const handleWidthChange = (value: string) => {
-    const width = Math.max(1, Math.min(16384, parseInt(value) || 0));
-    if (lockRatio && settings.maintainAspectRatio && image && image.dimensions.width > 0) {
-      const ratio = image.dimensions.height / image.dimensions.width;
-      updateSettings({ width, height: Math.round(width * ratio) });
-    } else {
-      updateSettings({ width });
-    }
-  };
+  const handleDimensionChange = (dimension: 'width' | 'height', value: string) => {
+    const numericValue = Math.max(1, Math.min(MAX_IMAGE_DIMENSION, parseInt(value) || 0));
 
-  const handleHeightChange = (value: string) => {
-    const height = Math.max(1, Math.min(16384, parseInt(value) || 0));
-    if (lockRatio && settings.maintainAspectRatio && image && image.dimensions.height > 0) {
-      const ratio = image.dimensions.width / image.dimensions.height;
-      updateSettings({ height, width: Math.round(height * ratio) });
-    } else {
-      updateSettings({ height });
+    if (image) {
+      const updates = calculateDimensionUpdate(
+        dimension,
+        numericValue,
+        image.dimensions,
+        lockRatio && settings.maintainAspectRatio
+      );
+      updateSettings(updates);
     }
   };
 
@@ -465,11 +461,11 @@ export function ImageSettingsPanel({
                   <Input
                     type="number"
                     value={settings.width || ''}
-                    onChange={(e) => handleWidthChange(e.target.value)}
+                    onChange={(e) => handleDimensionChange('width', e.target.value)}
                     placeholder={image.dimensions.width.toString()}
                     className="h-8 text-sm"
                     min={1}
-                    max={16384}
+                    max={MAX_IMAGE_DIMENSION}
                   />
                 </div>
                 <div className="space-y-1">
@@ -477,11 +473,11 @@ export function ImageSettingsPanel({
                   <Input
                     type="number"
                     value={settings.height || ''}
-                    onChange={(e) => handleHeightChange(e.target.value)}
+                    onChange={(e) => handleDimensionChange('height', e.target.value)}
                     placeholder={image.dimensions.height.toString()}
                     className="h-8 text-sm"
                     min={1}
-                    max={16384}
+                    max={MAX_IMAGE_DIMENSION}
                   />
                 </div>
               </div>

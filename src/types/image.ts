@@ -153,3 +153,4 @@ export const COMMON_RESOLUTIONS = [
   { name: 'Twitter Header (1500×500)', width: 1500, height: 500 },
   { name: 'YouTube Thumbnail (1280×720)', width: 1280, height: 720 },
 ];
+export const MAX_IMAGE_DIMENSION = 16384;
