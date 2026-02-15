@@ -1,6 +1,6 @@
 import { describe, it, before, after, beforeEach, mock } from 'node:test';
 import assert from 'node:assert';
-import { calculateDimensions, formatFileSize, processImage } from './image-processing.ts';
+import { calculateDimensions, formatFileSize, processImage, calculateDimensionUpdate } from './image-processing.ts';
 import type { ImageSettings, ProcessedImage } from '../types/image.ts';
 
 const DEFAULT_SETTINGS: ImageSettings = {
@@ -24,6 +24,47 @@ const DEFAULT_SETTINGS: ImageSettings = {
   flipHorizontal: false,
   flipVertical: false,
 };
+
+describe('calculateDimensionUpdate', () => {
+  it('should update width only when maintainRatio is false', () => {
+    const originalDimensions = { width: 1000, height: 500 };
+    const result = calculateDimensionUpdate('width', 200, originalDimensions, false);
+    assert.deepStrictEqual(result, { width: 200 });
+  });
+
+  it('should update height only when maintainRatio is false', () => {
+    const originalDimensions = { width: 1000, height: 500 };
+    const result = calculateDimensionUpdate('height', 200, originalDimensions, false);
+    assert.deepStrictEqual(result, { height: 200 });
+  });
+
+  it('should update both dimensions when maintainRatio is true and changing width', () => {
+    const originalDimensions = { width: 1000, height: 500 }; // ratio 0.5
+    const result = calculateDimensionUpdate('width', 200, originalDimensions, true);
+    // height = 200 * 0.5 = 100
+    assert.deepStrictEqual(result, { width: 200, height: 100 });
+  });
+
+  it('should update both dimensions when maintainRatio is true and changing height', () => {
+    const originalDimensions = { width: 1000, height: 500 }; // ratio 2
+    const result = calculateDimensionUpdate('height', 100, originalDimensions, true);
+    // width = 100 * 2 = 200
+    assert.deepStrictEqual(result, { height: 100, width: 200 });
+  });
+
+  it('should handle rounding correctly', () => {
+    const originalDimensions = { width: 300, height: 200 }; // ratio 0.666...
+    const result = calculateDimensionUpdate('width', 100, originalDimensions, true);
+    // height = 100 * (200/300) = 66.666... -> 67
+    assert.deepStrictEqual(result, { width: 100, height: 67 });
+  });
+
+  it('should not update other dimension if original dimensions are zero (invalid)', () => {
+     const originalDimensions = { width: 0, height: 0 };
+     const result = calculateDimensionUpdate('width', 100, originalDimensions, true);
+     assert.deepStrictEqual(result, { width: 100 });
+  });
+});
 
 describe('calculateDimensions', () => {
   it('should return original dimensions when no resizing is requested', () => {
