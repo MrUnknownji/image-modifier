@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   ZoomIn,
   ZoomOut,
@@ -20,11 +20,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import {
   Dialog,
   DialogContent,
@@ -53,29 +48,22 @@ export function ImagePreview({
   const [zoom, setZoom] = useState(1);
   const [activeTab, setActiveTab] = useState<'original' | 'processed'>('processed');
   const [dialogOpen, setDialogOpen] = useState(false);
-  const prevBlobUrlRef = useRef<string | null>(null);
-
-  const blobUrl = useMemo(() => {
-    if (processedBlob) {
-      return URL.createObjectURL(processedBlob);
-    }
-    return null;
-  }, [processedBlob]);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    if (prevBlobUrlRef.current && prevBlobUrlRef.current !== blobUrl) {
-      URL.revokeObjectURL(prevBlobUrlRef.current);
+    if (!processedBlob) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setBlobUrl(null);
+      return;
     }
-    prevBlobUrlRef.current = blobUrl;
-  }, [blobUrl]);
 
-  useEffect(() => {
+    const url = URL.createObjectURL(processedBlob);
+    setBlobUrl(url);
+
     return () => {
-      if (prevBlobUrlRef.current) {
-        URL.revokeObjectURL(prevBlobUrlRef.current);
-      }
+      URL.revokeObjectURL(url);
     };
-  }, []);
+  }, [processedBlob]);
 
   const displayUrl = useMemo(() => {
     if (activeTab === 'processed' && blobUrl) {
