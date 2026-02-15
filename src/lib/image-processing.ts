@@ -14,6 +14,17 @@ export function formatFileSize(bytes: number): string {
 }
 
 export async function getImageDimensions(file: File): Promise<ImageDimensions> {
+  if (typeof createImageBitmap !== 'undefined') {
+    try {
+      const bitmap = await createImageBitmap(file);
+      const dimensions = { width: bitmap.width, height: bitmap.height };
+      bitmap.close();
+      return dimensions;
+    } catch {
+      // Fallback to Image object if createImageBitmap fails
+    }
+  }
+
   return new Promise((resolve, reject) => {
     const img = new Image();
     const blobUrl = URL.createObjectURL(file);
