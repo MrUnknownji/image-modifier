@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/alert';
 import type { ProcessedImage, ImageSettings } from '@/types/image';
 import { processImage, formatFileSize } from '@/lib/image-processing';
+import { pLimit } from '@/lib/concurrency';
 import JSZip from 'jszip';
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -79,41 +80,56 @@ export function BatchProcessor({
     const zip = new JSZip();
     const processedImages: { name: string; blob: Blob }[] = [];
     const newErrors: string[] = [];
+    const limit = pLimit(3);
 
-    for (let i = 0; i < images.length; i++) {
-      const image = images[i];
-      setProgress((prev) => ({
-        ...prev!,
-        currentFile: image.metadata.name,
-      }));
+    const tasks = images.map((image) =>
+      limit(async () => {
+        setProgress((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            currentFile: image.metadata.name,
+          };
+        });
 
-      try {
-        const blob = await processImage(
-          { ...image, settings: globalSettings },
-          aspectRatio
-        );
-        const extension = globalSettings.format;
-        // Sanitize the filename to prevent path traversal
-        const sanitizedName = image.metadata.name.split('/').pop()?.split('\\').pop() || image.metadata.name;
-        const baseName = sanitizedName.replace(/\.[^/.]+$/, '');
-        const newName = `${baseName}_processed.${extension}`;
-        
-        processedImages.push({ name: newName, blob });
-        zip.file(newName, blob);
-        
-        setProcessedCount((prev) => prev + 1);
-        setProgress((prev) => ({
-          ...prev!,
-          completed: prev!.completed + 1,
-        }));
-      } catch {
-        newErrors.push(`Failed to process ${image.metadata.name}`);
-        setProgress((prev) => ({
-          ...prev!,
-          failed: prev!.failed + 1,
-        }));
-      }
-    }
+        try {
+          const blob = await processImage(
+            { ...image, settings: globalSettings },
+            aspectRatio
+          );
+          const extension = globalSettings.format;
+          // Sanitize the filename to prevent path traversal
+          const sanitizedName =
+            image.metadata.name.split('/').pop()?.split('\\').pop() ||
+            image.metadata.name;
+          const baseName = sanitizedName.replace(/\.[^/.]+$/, '');
+          const newName = `${baseName}_processed.${extension}`;
+
+          processedImages.push({ name: newName, blob });
+          zip.file(newName, blob);
+
+          setProcessedCount((prev) => prev + 1);
+          setProgress((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              completed: prev.completed + 1,
+            };
+          });
+        } catch {
+          newErrors.push(`Failed to process ${image.metadata.name}`);
+          setProgress((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              failed: prev.failed + 1,
+            };
+          });
+        }
+      })
+    );
+
+    await Promise.all(tasks);
 
     if (processedImages.length > 0) {
       if (processedImages.length === 1) {
