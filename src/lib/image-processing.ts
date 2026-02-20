@@ -13,7 +13,7 @@ export function formatFileSize(bytes: number): string {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
 }
 
-export async function getImageDimensions(file: File): Promise<ImageDimensions> {
+export async function getImageDimensions(file: File, existingUrl?: string): Promise<ImageDimensions> {
   if (typeof createImageBitmap !== 'undefined') {
     try {
       const bitmap = await createImageBitmap(file);
@@ -27,13 +27,26 @@ export async function getImageDimensions(file: File): Promise<ImageDimensions> {
 
   return new Promise((resolve, reject) => {
     const img = new Image();
-    const blobUrl = URL.createObjectURL(file);
+    let blobUrl: string;
+    let shouldRevoke = false;
+
+    if (existingUrl) {
+      blobUrl = existingUrl;
+    } else {
+      blobUrl = URL.createObjectURL(file);
+      shouldRevoke = true;
+    }
+
     img.onload = () => {
-      URL.revokeObjectURL(blobUrl);
+      if (shouldRevoke) {
+        URL.revokeObjectURL(blobUrl);
+      }
       resolve({ width: img.width, height: img.height });
     };
     img.onerror = () => {
-      URL.revokeObjectURL(blobUrl);
+      if (shouldRevoke) {
+        URL.revokeObjectURL(blobUrl);
+      }
       reject(new Error('Failed to load image'));
     };
     img.src = blobUrl;
@@ -247,50 +260,57 @@ export function downloadImage(url: string, filename: string) {
 }
 
 export async function createProcessedImage(file: File): Promise<ProcessedImage> {
-  const [dimensions, exif] = await Promise.all([
-    getImageDimensions(file),
-    extractEXIF(file),
-  ]);
+  const originalUrl = URL.createObjectURL(file);
 
-  const settings: ImageSettings = {
-    width: dimensions.width,
-    height: dimensions.height,
-    maintainAspectRatio: true,
-    quality: 85,
-    format: 'jpeg',
-    dpi: 72,
-    preserveMetadata: true,
-    filters: {
-      brightness: 100,
-      contrast: 100,
-      saturation: 100,
-      grayscale: 0,
-      sepia: 0,
-      blur: 0,
-      hueRotate: 0,
-    },
-    rotation: 0,
-    flipHorizontal: false,
-    flipVertical: false,
-  };
+  try {
+    const [dimensions, exif] = await Promise.all([
+      getImageDimensions(file, originalUrl),
+      extractEXIF(file),
+    ]);
 
-  return {
-    id: generateId(),
-    originalFile: file,
-    originalUrl: URL.createObjectURL(file),
-    processedUrl: null,
-    metadata: {
-      name: file.name,
-      type: file.type,
-      size: file.size,
-      lastModified: file.lastModified,
-    },
-    dimensions,
-    exif,
-    settings,
-    history: [{ settings: { ...settings }, timestamp: Date.now(), action: 'Initial' }],
-    historyIndex: 0,
-  };
+    const settings: ImageSettings = {
+      width: dimensions.width,
+      height: dimensions.height,
+      maintainAspectRatio: true,
+      quality: 85,
+      format: 'jpeg',
+      dpi: 72,
+      preserveMetadata: true,
+      filters: {
+        brightness: 100,
+        contrast: 100,
+        saturation: 100,
+        grayscale: 0,
+        sepia: 0,
+        blur: 0,
+        hueRotate: 0,
+      },
+      rotation: 0,
+      flipHorizontal: false,
+      flipVertical: false,
+    };
+
+    return {
+      id: generateId(),
+      originalFile: file,
+      originalUrl,
+      processedUrl: null,
+      metadata: {
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        lastModified: file.lastModified,
+      },
+      dimensions,
+      exif,
+      settings,
+      history: [{ settings: { ...settings }, timestamp: Date.now(), action: 'Initial' }],
+      historyIndex: 0,
+    };
+  } catch (error) {
+    URL.revokeObjectURL(originalUrl);
+    throw error;
+  }
 }
 
 export function calculateDimensionUpdate(
