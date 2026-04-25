@@ -1,0 +1,55 @@
+
+/home/unknown/web/image-modifier/scripts/benchmark.mjs
+  67:31  warning  'args' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/unknown/web/image-modifier/src/components/image-modifier/image-preview.tsx
+  288:23  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/home/unknown/web/image-modifier/src/components/image-modifier/image-uploader.tsx
+    5:40  warning  'Images' is defined but never used                                                                                                                                                                                                                                                       @typescript-eslint/no-unused-vars
+    8:10  warning  'Separator' is defined but never used                                                                                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+  134:23  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/home/unknown/web/image-modifier/src/lib/image-processing.test.ts
+    3:10  warning  'generateId' is defined but never used    @typescript-eslint/no-unused-vars
+  232:28  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  233:28  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  234:22  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  235:19  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  236:23  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  237:26  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  238:20  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  252:10  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  278:10  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  282:31  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  311:67  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  312:10  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  337:45  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  489:46  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/unknown/web/image-modifier/src/lib/process-image-optimization.test.ts
+   16:15  warning  'content' is defined but never used       @typescript-eslint/no-unused-vars
+   16:24  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   16:31  warning  'options' is defined but never used       @typescript-eslint/no-unused-vars
+   16:41  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   25:24  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   25:55  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   33:38  warning  'obj' is defined but never used           @typescript-eslint/no-unused-vars
+   33:43  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   34:38  warning  'url' is defined but never used           @typescript-eslint/no-unused-vars
+   72:22  warning  'type' is defined but never used          @typescript-eslint/no-unused-vars
+   73:57  warning  'type' is defined but never used          @typescript-eslint/no-unused-vars
+   73:71  warning  'quality' is defined but never used       @typescript-eslint/no-unused-vars
+   74:51  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   87:10  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   88:33  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   89:39  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   90:31  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   91:31  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  108:55  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  116:57  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  136:55  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  144:57  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+✖ 42 problems (29 errors, 13 warnings)
+

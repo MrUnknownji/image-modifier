@@ -1,7 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, mock, before, after } from 'node:test';
 import assert from 'node:assert';
-import { processImage } from './image-processing.ts';
-import type { ProcessedImage } from '../types/image.ts';
+import { processImage } from './image-processing';
+import type { ProcessedImage } from '../types/image';
 
 // --- Mocks ---
 
@@ -13,7 +14,7 @@ const originalFile = global.File;
 
 // Mock Blob
 class MockBlob {
-  constructor(content: any[], options?: any) {}
+  constructor(_content: any[], _options?: any) {}
 }
 
 // Mock File
@@ -30,8 +31,8 @@ class MockFile extends MockBlob {
 }
 
 // Mock URL
-const mockCreateObjectURL = mock.fn((obj: any) => 'blob:mock-created-url');
-const mockRevokeObjectURL = mock.fn((url: string) => {});
+const mockCreateObjectURL = mock.fn((_obj: any) => 'blob:mock-created-url');
+const mockRevokeObjectURL = mock.fn((_url: string) => {});
 
 // Mock Image
 class MockImage {
@@ -69,8 +70,8 @@ const mockDocument = {
       return {
         width: 0,
         height: 0,
-        getContext: (type: string) => mockContext,
-        toBlob: (callback: (blob: Blob | null) => void, type: string, quality?: number) => {
+        getContext: (_type: string) => mockContext,
+        toBlob: (callback: (blob: Blob | null) => void, _type: string, _quality?: number) => {
           callback(new MockBlob(['mock-data']) as any);
         }
       };

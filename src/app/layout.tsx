@@ -1,20 +1,18 @@
 import type { Metadata } from "next";
-import { Poppins, Libre_Baskerville, IBM_Plex_Mono } from "next/font/google";
+import { Inter, Outfit, IBM_Plex_Mono } from "next/font/google";
+import { ThemeProvider } from "next-themes";
 import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-const poppins = Poppins({
+const inter = Inter({
   variable: "--font-sans",
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
   display: "swap",
 });
 
-const libreBaskerville = Libre_Baskerville({
-  variable: "--font-serif",
+const outfit = Outfit({
+  variable: "--font-heading",
   subsets: ["latin"],
-  weight: ["400", "700"],
-  style: ["normal", "italic"],
   display: "swap",
 });
 
@@ -26,9 +24,9 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Image Modifier - Resize, Convert & Optimize Images",
-  description: "A powerful browser-based image processing tool. Resize, convert formats, adjust quality, and modify metadata - all locally without uploading to any server.",
-  keywords: ["image resizer", "image converter", "image optimizer", "batch processing", "EXIF editor", "photo editor"],
+  title: "AuraEdit - Professional Image Editing & Optimization",
+  description: "A powerful, privacy-focused image processing tool. Resize, convert, and optimize your images with a professional aura.",
+  keywords: ["image editor", "auraedit", "image resizer", "image converter", "image optimizer", "batch processing"],
   icons: {
     icon: "/favicon.svg",
     apple: "/favicon.svg",
@@ -41,13 +39,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body
-        className={`${poppins.variable} ${libreBaskerville.variable} ${ibmPlexMono.variable} font-sans antialiased`}
+        className={`${inter.variable} ${outfit.variable} ${ibmPlexMono.variable} font-sans antialiased`}
       >
-        <TooltipProvider>
-          {children}
-        </TooltipProvider>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+          <TooltipProvider>
+            {children}
+          </TooltipProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

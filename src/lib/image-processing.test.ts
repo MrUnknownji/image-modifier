@@ -1,7 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, before, after, beforeEach, mock } from 'node:test';
 import assert from 'node:assert';
-import { calculateDimensions, formatFileSize, processImage, calculateDimensionUpdate } from './image-processing.ts';
-import type { ImageSettings, ProcessedImage } from '../types/image.ts';
+import { formatFileSize, calculateDimensions, calculateDimensionUpdate, processImage } from './image-processing';
+import type { ImageSettings, ProcessedImage } from '../types/image';
 
 const DEFAULT_SETTINGS: ImageSettings = {
   width: 0,
@@ -279,7 +280,7 @@ describe('processImage', () => {
 
     // Mock Document
     mockDrawImage = mock.fn();
-    mockToBlob = mock.fn((cb) => cb(new Blob(['mock-blob'], { type: 'image/jpeg' })));
+    mockToBlob = mock.fn((cb: any) => cb(new Blob(['mock-blob'], { type: 'image/jpeg' })));
 
     mockContext = {
       drawImage: mockDrawImage,
@@ -300,7 +301,7 @@ describe('processImage', () => {
       toBlob: mockToBlob,
     };
 
-    mockCreateElement = mock.fn((tag) => {
+    mockCreateElement = mock.fn((tag: string) => {
       if (tag === 'canvas') return mockCanvas;
       return { href: '', download: '', click: mock.fn() };
     });

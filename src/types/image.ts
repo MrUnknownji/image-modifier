@@ -29,17 +29,6 @@ export interface EXIFData {
   [key: string]: unknown;
 }
 
-export interface ProcessedImage {
-  id: string;
-  originalFile: File;
-  originalUrl: string;
-  processedUrl: string | null;
-  metadata: ImageMetadata;
-  dimensions: ImageDimensions;
-  exif: EXIFData | null;
-  settings: ImageSettings;
-}
-
 export interface ImageFilters {
   brightness: number;
   contrast: number;

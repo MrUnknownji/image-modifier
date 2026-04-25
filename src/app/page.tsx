@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { ImagePlus, Sparkles, Shield, Zap, Image as ImageIcon, Undo2, Redo2, Check, Lock, Cpu, Layers, Palette, Wand2, FileImage, HardDrive, Globe } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useTheme } from 'next-themes';
+import { ImagePlus, Sparkles, Shield, Zap, Image as ImageIcon, Check, Lock, Cpu, Layers, Palette, Wand2, FileImage, HardDrive, Globe, Sun, Moon } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
-import { Logo, LogoSmall } from '@/components/ui/logo';
+import { Logo } from '@/components/ui/logo';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -13,232 +15,207 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Separator } from '@/components/ui/separator';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from '@/components/ui/dialog';
-import { ErrorBoundary } from '@/components/error-boundary';
 import { ImageUploader } from '@/components/image-modifier/image-uploader';
 import { ImageSettingsPanel } from '@/components/image-modifier/image-settings-panel';
 import { ImagePreview } from '@/components/image-modifier/image-preview';
 import { BatchProcessor } from '@/components/image-modifier/batch-processor';
-import {
-  createProcessedImage,
-  processImage,
-  downloadImage,
-} from '@/lib/image-processing';
+import { processImage } from '@/lib/image-processing';
+import type { ProcessedImage, ImageSettings } from '@/types/image';
 
-import type {
-  ProcessedImage,
-  ImageSettings,
-} from '@/types/image';
+// Error boundary component for the whole app
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
 
-const MAX_FILE_SIZE = 100 * 1024 * 1024;
-const MAX_DIMENSION = 16384;
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('App error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex h-screen w-full flex-col items-center justify-center p-4 text-center">
+          <h2 className="text-2xl font-bold">Something went wrong</h2>
+          <p className="mt-2 text-muted-foreground">Please refresh the page to try again.</p>
+          <Button className="mt-4" onClick={() => window.location.reload()}>Refresh Page</Button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+import React from 'react';
 
 function ImageModifierApp() {
   const [images, setImages] = useState<ProcessedImage[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [processedBlob, setProcessedBlob] = useState<Blob | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [activeTab, setActiveTab] = useState('modify');
   const [aspectRatio] = useState<number | null>(null);
   const [showFeaturesDialog, setShowFeaturesDialog] = useState(false);
   const [showPrivacyDialog, setShowPrivacyDialog] = useState(false);
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const selectedImage = images.find((img) => img.id === selectedId) || null;
 
-  const canUndo = selectedImage && selectedImage.historyIndex > 0;
-  const canRedo = selectedImage && selectedImage.historyIndex < selectedImage.history.length - 1;
-
-  const addHistoryEntry = useCallback((imageId: string, settings: ImageSettings, action: string) => {
-    setImages((prev) =>
-      prev.map((img) => {
-        if (img.id !== imageId) return img;
-        
-        const newHistory = img.history.slice(0, img.historyIndex + 1);
-        newHistory.push({ settings: { ...settings }, timestamp: Date.now(), action });
-        
-        return {
-          ...img,
-          history: newHistory,
-          historyIndex: newHistory.length - 1,
-        };
-      })
-    );
-  }, []);
-
-  const handleUndo = useCallback(() => {
-    if (!selectedImage || !canUndo) return;
+  const handleImagesAdd = useCallback(async (files: FileList) => {
+    const newImages: ProcessedImage[] = [];
     
-    const newIndex = selectedImage.historyIndex - 1;
-    const historicalSettings = selectedImage.history[newIndex].settings;
-    
-    setImages((prev) =>
-      prev.map((img) =>
-        img.id === selectedId ? { ...img, settings: historicalSettings, historyIndex: newIndex } : img
-      )
-    );
-    toast.success('Undone');
-  }, [selectedImage, selectedId, canUndo]);
-
-  const handleRedo = useCallback(() => {
-    if (!selectedImage || !canRedo) return;
-    
-    const newIndex = selectedImage.historyIndex + 1;
-    const historicalSettings = selectedImage.history[newIndex].settings;
-    
-    setImages((prev) =>
-      prev.map((img) =>
-        img.id === selectedId ? { ...img, settings: historicalSettings, historyIndex: newIndex } : img
-      )
-    );
-    toast.success('Redone');
-  }, [selectedImage, selectedId, canRedo]);
-
-  const handleImagesAdd = useCallback(
-    async (files: FileList) => {
-      const newImages: ProcessedImage[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const url = URL.createObjectURL(file);
       
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        if (!file.type.startsWith('image/')) {
-          toast.error(`Skipped ${file.name}: Not an image file`);
-          continue;
-        }
-        
-        if (file.size > MAX_FILE_SIZE) {
-          toast.error(`Skipped ${file.name}: File too large (max 100MB)`);
-          continue;
-        }
-        
-        try {
-          const processedImage = await createProcessedImage(file);
-          
-          if (processedImage.dimensions.width > MAX_DIMENSION || processedImage.dimensions.height > MAX_DIMENSION) {
-            toast.warning(`${file.name}: Very large image may cause performance issues`);
-          }
-          
-          newImages.push(processedImage);
-        } catch (error) {
-          console.error('Failed to process image:', error);
-          toast.error(`Failed to load ${file.name}`);
-        }
-      }
+      // Get image dimensions
+      const img = new Image();
+      const dimensions = await new Promise<{ width: number; height: number }>((resolve) => {
+        img.onload = () => resolve({ width: img.width, height: img.height });
+        img.src = url;
+      });
 
-      if (newImages.length > 0) {
-        setImages((prev) => [...prev, ...newImages]);
-        toast.success(`Added ${newImages.length} image(s)`);
-        
-        if (!selectedId) {
-          setSelectedId(newImages[0].id);
-        }
-      }
-    },
-    [selectedId]
-  );
+      const processedImage: ProcessedImage = {
+        id: Math.random().toString(36).substring(7),
+        originalFile: file,
+        originalUrl: url,
+        processedUrl: null,
+        metadata: {
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          lastModified: file.lastModified,
+        },
+        dimensions,
+        exif: null,
+        settings: {
+          format: (['jpeg', 'jpg', 'png', 'webp'].includes(file.type.split('/')[1]) ? file.type.split('/')[1].replace('jpg', 'jpeg') : 'webp') as 'jpeg' | 'png' | 'webp',
+          quality: 80,
+          width: dimensions.width,
+          height: dimensions.height,
+          maintainAspectRatio: true,
+          preserveMetadata: true,
+          dpi: 72,
+          rotation: 0,
+          flipHorizontal: false,
+          flipVertical: false,
+          filters: {
+            brightness: 100,
+            contrast: 100,
+            saturation: 100,
+            grayscale: 0,
+            sepia: 0,
+            blur: 0,
+            hueRotate: 0,
+          },
+        },
+        history: [],
+        historyIndex: -1,
+      };
+      
+      newImages.push(processedImage);
+    }
+
+    setImages((prev) => [...prev, ...newImages]);
+    if (!selectedId && newImages.length > 0) {
+      setSelectedId(newImages[0].id);
+    }
+    
+    toast.success(`Added ${newImages.length} image(s)`);
+  }, [selectedId]);
 
   const handleImageRemove = useCallback((id: string) => {
     setImages((prev) => {
-      const imageToRemove = prev.find(img => img.id === id);
-      if (imageToRemove?.originalUrl) {
-        URL.revokeObjectURL(imageToRemove.originalUrl);
-      }
-      
-      const newImages = prev.filter((img) => img.id !== id);
-      if (id === selectedId) {
-        setSelectedId(newImages.length > 0 ? newImages[0].id : null);
-      }
-      return newImages;
+      const img = prev.find(i => i.id === id);
+      if (img?.originalUrl) URL.revokeObjectURL(img.originalUrl);
+      return prev.filter((i) => i.id !== id);
     });
-    setProcessedBlob(null);
-    toast.success('Image removed');
+    if (selectedId === id) {
+      setSelectedId(null);
+      setProcessedBlob(null);
+    }
   }, [selectedId]);
 
-  const handleSettingsChange = useCallback(
-    async (settings: ImageSettings) => {
-      if (!selectedImage || !selectedId) return;
-
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-      abortControllerRef.current = new AbortController();
-
-      setImages((prev) =>
-        prev.map((img) =>
-          img.id === selectedId ? { ...img, settings } : img
-        )
-      );
-
-      setIsProcessing(true);
-      try {
-        const updatedImage = { ...selectedImage, settings };
-        const blob = await processImage(updatedImage, aspectRatio, abortControllerRef.current.signal);
-        
-        if (!abortControllerRef.current.signal.aborted) {
-          setProcessedBlob(blob);
-          addHistoryEntry(selectedId, settings, 'Settings changed');
-        }
-      } catch (error) {
-        if ((error as Error).message !== 'Processing aborted' && !abortControllerRef.current.signal.aborted) {
-          console.error('Failed to process image:', error);
-          toast.error('Failed to process image');
-        }
-      } finally {
-        if (!abortControllerRef.current.signal.aborted) {
-          setIsProcessing(false);
-        }
-      }
-    },
-    [selectedImage, selectedId, aspectRatio, addHistoryEntry]
-  );
+  const handleSettingsChange = useCallback((settings: ImageSettings) => {
+    if (!selectedId) return;
+    setImages((prev) =>
+      prev.map((img) =>
+        img.id === selectedId ? { ...img, settings } : img
+      )
+    );
+  }, [selectedId]);
 
   const handleApplyToAll = useCallback(() => {
     if (!selectedImage) return;
-    
     setImages((prev) =>
-      prev.map((img) =>
-        img.id === selectedId
-          ? img
-          : { ...img, settings: { ...selectedImage.settings } }
-      )
+      prev.map((img) => ({
+        ...img,
+        settings: { ...selectedImage.settings },
+      }))
     );
-    toast.success('Applied settings to all images');
-  }, [selectedImage, selectedId]);
+    toast.success('Settings applied to all images');
+  }, [selectedImage]);
 
-  const handleDownload = useCallback(() => {
+  const handleDownload = useCallback(async () => {
     if (!processedBlob || !selectedImage) return;
     
     const url = URL.createObjectURL(processedBlob);
-    const extension = selectedImage.settings.format;
-    const baseName = selectedImage.metadata.name.replace(/\.[^/.]+$/, '');
-    const newName = `${baseName}_processed.${extension}`;
-    
-    downloadImage(url, newName);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `processed_${selectedImage.metadata.name.split('.')[0]}.${selectedImage.settings.format}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast.success('Image downloaded');
+    
+    toast.success('Image downloaded successfully');
   }, [processedBlob, selectedImage]);
 
-  useEffect(() => {
-    const processSelected = async () => {
-      if (!selectedImage) {
-        setProcessedBlob(null);
-        return;
-      }
+  const handleUndo = useCallback(() => {
+    // History implementation would go here
+  }, []);
 
+  const handleRedo = useCallback(() => {
+    // History implementation would go here
+  }, []);
+
+  // Process selected image whenever settings change
+  useEffect(() => {
+    if (!selectedImage) {
+      setProcessedBlob(null);
+      return;
+    }
+
+    const processSelected = async () => {
+      // Abort previous processing
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
-      abortControllerRef.current = new AbortController();
-      const currentController = abortControllerRef.current;
+
+      const currentController = new AbortController();
+      abortControllerRef.current = currentController;
 
       setIsProcessing(true);
       try {
-        const blob = await processImage(selectedImage, aspectRatio, currentController.signal);
+        const blob = await processImage(selectedImage, aspectRatio);
         if (!currentController.signal.aborted) {
           setProcessedBlob(blob);
         }
@@ -261,7 +238,7 @@ function ImageModifierApp() {
         abortControllerRef.current.abort();
       }
     };
-  }, [selectedImage?.id, aspectRatio]);
+  }, [selectedImage, aspectRatio]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -322,281 +299,244 @@ function ImageModifierApp() {
         }
       });
     };
-  }, []);
-
-  // Prevent page scroll when scrolling on number inputs
-  useEffect(() => {
-    let focusedInput: HTMLInputElement | null = null;
-
-    const handleFocus = (e: FocusEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' && target.getAttribute('type') === 'number') {
-        focusedInput = target as HTMLInputElement;
-      }
-    };
-
-    const handleBlur = (e: FocusEvent) => {
-      const target = e.target as HTMLElement;
-      if (target === focusedInput) {
-        focusedInput = null;
-      }
-    };
-
-    const handleWheel = (e: WheelEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' && target.getAttribute('type') === 'number' && target === focusedInput) {
-        e.preventDefault();
-        
-        const input = target as HTMLInputElement;
-        const step = parseFloat(input.step) || 1;
-        const currentValue = parseFloat(input.value) || 0;
-        const delta = e.deltaY > 0 ? -step : step;
-        const min = parseFloat(input.min);
-        const max = parseFloat(input.max);
-        const hasMin = !isNaN(min);
-        const hasMax = !isNaN(max);
-        let newValue = currentValue + delta;
-        if (hasMin) newValue = Math.max(min, newValue);
-        if (hasMax) newValue = Math.min(max, newValue);
-        
-        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set;
-        nativeInputValueSetter!.call(input, newValue.toString());
-        
-        const inputEvent = new Event('input', { bubbles: true, cancelable: true });
-        const changeEvent = new Event('change', { bubbles: true, cancelable: true });
-        input.dispatchEvent(inputEvent);
-        input.dispatchEvent(changeEvent);
-      }
-    };
-
-    document.addEventListener('focus', handleFocus, true);
-    document.addEventListener('blur', handleBlur, true);
-    document.addEventListener('wheel', handleWheel, { passive: false });
-    
-    return () => {
-      document.removeEventListener('focus', handleFocus, true);
-      document.removeEventListener('blur', handleBlur, true);
-      document.removeEventListener('wheel', handleWheel);
-    };
-  }, []);
+  }, [images]);
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <Toaster position="bottom-right" richColors closeButton />
+    <div className="min-h-screen bg-background font-sans selection:bg-primary/20">
+      <Toaster position="top-center" richColors />
       
-      <header className="sticky top-0 z-50 border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 w-full">
-        <div className="px-4 py-4 w-full max-w-[100vw] box-border">
-          <div className="flex items-center justify-between w-full">
-            <div className="flex items-center gap-3">
-              <Logo size={40} />
-              <div>
-                <h1 className="text-lg font-semibold tracking-tight">Image Modifier</h1>
-                <p className="text-xs text-muted-foreground">
-                  Resize, convert, and optimize your images
-                </p>
-              </div>
+      {/* Header */}
+      <motion.header 
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
+        className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-md"
+      >
+        <div className="max-w-full mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Logo size={32} className="text-primary" />
+            <div>
+              <h1 className="text-xl font-bold tracking-tight text-foreground">AuraEdit</h1>
+              <p className="text-xs text-muted-foreground font-medium">
+                Resize, convert, and optimize your images
+              </p>
             </div>
-            <div className="flex items-center gap-1">
-              {canUndo && (
-                <Button variant="ghost" size="icon" onClick={handleUndo} className="h-8 w-8" title="Undo (Ctrl+Z)">
-                  <Undo2 className="h-4 w-4" />
-                </Button>
-              )}
-              {canRedo && (
-                <Button variant="ghost" size="icon" onClick={handleRedo} className="h-8 w-8" title="Redo (Ctrl+Y)">
-                  <Redo2 className="h-4 w-4" />
-                </Button>
-              )}
-              <div className="hidden sm:flex items-center gap-1 ml-2">
-                <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground" onClick={() => setShowFeaturesDialog(true)}>
-                  <Zap className="h-4 w-4" />
-                  Features
-                </Button>
-                <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground" onClick={() => setShowPrivacyDialog(true)}>
-                  <Shield className="h-4 w-4" />
-                  Privacy
-                </Button>
-              </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <nav className="hidden md:flex items-center gap-1">
+              <Button variant="ghost" size="sm" onClick={() => setShowFeaturesDialog(true)} className="gap-2 text-xs font-bold uppercase tracking-wider">
+                <Zap className="h-3.5 w-3.5" />
+                Features
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setShowPrivacyDialog(true)} className="gap-2 text-xs font-bold uppercase tracking-wider">
+                <Shield className="h-3.5 w-3.5" />
+                Privacy
+              </Button>
+            </nav>
+            <div className="h-6 w-px bg-border/50 mx-2 hidden sm:block" />
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="icon" 
+                className="h-9 w-9 rounded-full"
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              >
+                {mounted ? (
+                  theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />
+                ) : (
+                  <Sun className="h-4 w-4" />
+                )}
+              </Button>
             </div>
           </div>
         </div>
-      </header>
+      </motion.header>
 
-      <main className="flex-1 px-4 py-6 w-full max-w-[100vw] box-border overflow-x-hidden">
-        <Tabs defaultValue="modify" className="space-y-4 w-full max-w-full">
-          <div className="flex justify-center w-full px-0">
-            <TabsList className="grid w-full grid-cols-2 max-w-full">
-              <TabsTrigger value="modify" className="gap-2">
-                <ImagePlus className="h-4 w-4" />
-                Modify Images
-              </TabsTrigger>
-              <TabsTrigger value="batch" className="gap-2">
-                <Sparkles className="h-4 w-4" />
-                Batch Process
-              </TabsTrigger>
-            </TabsList>
-          </div>
-
-          <TabsContent value="modify" className="space-y-4 w-full max-w-full px-0">
-            <div className="flex flex-col lg:grid lg:grid-cols-[380px_1fr] gap-4 lg:gap-6 w-full max-w-full">
-              <div className="space-y-4 w-full max-w-full">
-                <Card className="overflow-hidden w-full max-w-full">
-                  <CardHeader className="pb-4 px-4">
-                    <CardTitle className="text-base font-semibold flex items-center gap-2">
-                      <ImageIcon className="h-4 w-4 text-primary" />
-                      Images
-                    </CardTitle>
-                    <CardDescription>
-                      Upload and manage your images
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="px-4">
-                    <ImageUploader
-                      images={images}
-                      onImagesAdd={handleImagesAdd}
-                      onImageRemove={handleImageRemove}
-                      onImageSelect={setSelectedId}
-                      selectedId={selectedId}
-                    />
-                  </CardContent>
-                </Card>
-
-                <ImageSettingsPanel
-                  image={selectedImage}
-                  onSettingsChange={handleSettingsChange}
-                  onApplyToAll={handleApplyToAll}
-                  hasMultipleImages={images.length > 1}
-                />
-              </div>
-
-              <div className="space-y-4 w-full">
-                <ImagePreview
-                  image={selectedImage}
-                  processedBlob={processedBlob}
-                  isProcessing={isProcessing}
-                  onDownload={handleDownload}
-                />
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="batch" className="w-full max-w-full px-0">
-            <div className="flex flex-col md:grid md:grid-cols-2 gap-4 w-full max-w-full">
-              <Card className="w-full max-w-full">
-                <CardHeader className="px-4">
-                  <CardTitle className="text-base font-semibold">Batch Processing</CardTitle>
-                  <CardDescription>
-                    Process multiple images at once with the same settings
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4 px-4">
-                  <ImageUploader
-                    images={images}
-                    onImagesAdd={handleImagesAdd}
-                    onImageRemove={handleImageRemove}
-                    onImageSelect={setSelectedId}
-                    selectedId={selectedId}
-                  />
-                </CardContent>
-              </Card>
-
-              <div className="space-y-4 w-full max-w-full">
-                {selectedImage && (
-                  <ImageSettingsPanel
-                    image={selectedImage}
-                    onSettingsChange={handleSettingsChange}
-                    onApplyToAll={handleApplyToAll}
-                    hasMultipleImages={images.length > 1}
-                  />
-                )}
-                
-                <BatchProcessor
+      <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-8 items-start">
+          {/* Sidebar */}
+          <motion.div 
+            initial={{ x: -20, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{ duration: 0.5, ease: "easeOut", delay: 0.1 }}
+            className="flex flex-col gap-8 sticky top-24"
+          >
+            <Card className="shadow-sm border-border/50 overflow-hidden">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-base font-bold flex items-center gap-2">
+                  <ImagePlus className="h-4 w-4 text-primary" />
+                  Upload Images
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Select or drag and drop images to start editing
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <ImageUploader
                   images={images}
-                  globalSettings={selectedImage?.settings || {
-                    width: 1920,
-                    height: 1080,
-                    maintainAspectRatio: true,
-                    quality: 85,
-                    format: 'jpeg',
-                    dpi: 72,
-                    preserveMetadata: true,
-                    filters: {
-                      brightness: 100,
-                      contrast: 100,
-                      saturation: 100,
-                      grayscale: 0,
-                      sepia: 0,
-                      blur: 0,
-                      hueRotate: 0,
-                    },
-                    rotation: 0,
-                    flipHorizontal: false,
-                    flipVertical: false,
-                  }}
-                  aspectRatio={aspectRatio}
+                  selectedId={selectedId}
+                  onImagesAdd={handleImagesAdd}
+                  onImageSelect={setSelectedId}
+                  onImageRemove={handleImageRemove}
                 />
-              </div>
-            </div>
-          </TabsContent>
-        </Tabs>
-      </main>
+              </CardContent>
+            </Card>
 
-      <footer className="border-t border-border/40 bg-muted/30 w-full max-w-full">
-        <div className="px-4 py-6 w-full max-w-full">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-full">
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <LogoSmall size={32} />
-                <span className="font-semibold">Image Modifier</span>
-              </div>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                A powerful browser-based image processing tool. Resize, convert formats, 
-                adjust quality, and modify metadata — all locally without uploading to any server.
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              <h3 className="font-semibold text-sm">Features</h3>
-              <ul className="space-y-2">
-                <li className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Zap className="h-3.5 w-3.5 text-primary" />
-                  Fast client-side processing
-                </li>
-                <li className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Shield className="h-3.5 w-3.5 text-primary" />
-                  100% private — images never leave your device
-                </li>
-                <li className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <ImageIcon className="h-3.5 w-3.5 text-primary" />
-                  Supports JPG, PNG, WebP, GIF, BMP, TIFF
-                </li>
-                <li className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Card className="shadow-sm border-border/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-bold flex items-center gap-2">
                   <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  Batch processing with ZIP download
-                </li>
-              </ul>
-            </div>
+                  Getting Started
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ol className="space-y-4 text-xs font-medium text-muted-foreground list-none p-0">
+                  <li className="flex gap-3">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-[10px]">1</span>
+                    Upload your image(s)
+                  </li>
+                  <li className="flex gap-3">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-[10px]">2</span>
+                    Adjust settings
+                  </li>
+                  <li className="flex gap-3">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-[10px]">3</span>
+                    Download your result
+                  </li>
+                </ol>
+              </CardContent>
+            </Card>
+          </motion.div>
 
-            <div className="space-y-3">
-              <h3 className="font-semibold text-sm">Privacy & Security</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                All image processing happens directly in your browser. 
-                No data is ever uploaded to any server, ensuring complete privacy.
-              </p>
-            </div>
+          {/* Main Content */}
+          <motion.main 
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.5, ease: "easeOut", delay: 0.2 }}
+            className="min-w-0"
+          >
+            <Tabs defaultValue="modify" className="w-full" onValueChange={setActiveTab}>
+              <TabsList className="mb-6">
+                <TabsTrigger value="modify" className="gap-2">
+                  <ImageIcon className="h-4 w-4" />
+                  Modify Images
+                </TabsTrigger>
+                <TabsTrigger value="batch" className="gap-2">
+                  <Layers className="h-4 w-4" />
+                  Batch Process
+                </TabsTrigger>
+              </TabsList>
+              
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={activeTab}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <TabsContent value="modify" className="mt-0">
+                    <div className="grid grid-cols-1 xl:grid-cols-[1fr_350px] gap-8">
+                      <div className="space-y-8">
+                        <ImagePreview
+                          image={selectedImage}
+                          processedBlob={processedBlob}
+                          isProcessing={isProcessing}
+                          onDownload={handleDownload}
+                        />
+                      </div>
+                      <div className="space-y-8">
+                        <ImageSettingsPanel
+                          image={selectedImage}
+                          onSettingsChange={handleSettingsChange}
+                          onApplyToAll={handleApplyToAll}
+                          hasMultipleImages={images.length > 1}
+                        />
+                      </div>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="batch" className="mt-0">
+                    <BatchProcessor 
+                      images={images} 
+                      globalSettings={images[0]?.settings || {
+                        format: 'webp',
+                        quality: 80,
+                        width: 1920,
+                        height: 1080,
+                        maintainAspectRatio: true,
+                        preserveMetadata: true,
+                        rotation: 0,
+                        flipHorizontal: false,
+                        flipVertical: false,
+                        filters: {
+                          brightness: 100,
+                          contrast: 100,
+                          saturation: 100,
+                          grayscale: 0,
+                          sepia: 0,
+                          blur: 0,
+                          hueRotate: 0,
+                        },
+                      }}
+                      aspectRatio={aspectRatio}
+                    />
+                  </TabsContent>
+                </motion.div>
+              </AnimatePresence>
+            </Tabs>
+          </motion.main>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <motion.footer 
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        transition={{ duration: 1 }}
+        viewport={{ once: true }}
+        className="w-full border-t border-border/50 bg-muted/20 mt-16"
+      >
+        <div className="max-w-full mx-auto px-6 py-12">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 mb-12">
+            {[
+              { icon: Zap, title: "Fast Processing", desc: "Optimized algorithms for blazing fast results" },
+              { icon: Lock, title: "Private & Secure", desc: "Your images never leave your device" },
+              { icon: FileImage, title: "Multiple Formats", desc: "Supports all popular image formats" },
+              { icon: Layers, title: "Batch Processing", desc: "Process multiple images at once" },
+              { icon: Sparkles, title: "High Quality", desc: "Maintain quality while optimizing" }
+            ].map((feature, i) => (
+              <motion.div 
+                key={i} 
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: i * 0.1 }}
+                viewport={{ once: true }}
+                className="flex flex-col items-center text-center space-y-3 p-4 rounded-2xl bg-background/50 border border-border/50 shadow-sm hover:shadow-md hover:border-primary/20 transition-all group"
+              >
+                <div className="h-12 w-12 flex items-center justify-center rounded-2xl bg-primary/5 ring-1 ring-primary/10 group-hover:bg-primary/10 transition-colors">
+                  <feature.icon className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-foreground">{feature.title}</h3>
+                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{feature.desc}</p>
+                </div>
+              </motion.div>
+            ))}
           </div>
 
-          <Separator className="my-6" />
-
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
-            <p>© {new Date().getFullYear()} Image Modifier. Open source project.</p>
-            <div className="flex items-center gap-1.5">
-              <Shield className="h-3.5 w-3.5" />
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-6 pt-8 border-t border-border/50">
+            <p className="text-xs font-medium text-muted-foreground italic">
+              © {new Date().getFullYear()} AuraEdit. Open source project.
+            </p>
+            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground px-4 py-2 bg-background/50 rounded-full border border-border/50">
+              <Shield className="h-3.5 w-3.5 text-primary" />
               <span>Your images never leave your device</span>
             </div>
           </div>
         </div>
-      </footer>
+      </motion.footer>
 
       <Dialog open={showFeaturesDialog} onOpenChange={setShowFeaturesDialog}>
         <DialogContent className="max-w-lg">

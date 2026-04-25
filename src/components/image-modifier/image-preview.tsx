@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   ZoomIn,
   ZoomOut,
@@ -15,6 +16,8 @@ import {
   Calendar,
   Aperture,
   X,
+  Sparkles,
+  Upload,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -97,13 +100,35 @@ export function ImagePreview({
 
   if (!image) {
     return (
-      <Card className="border-border/60 h-full min-h-[300px] w-full max-w-full">
-        <CardContent className="flex flex-col items-center justify-center h-full text-muted-foreground py-16">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted mb-3">
-            <ImageIcon className="h-6 w-6 text-muted-foreground/40" />
+      <Card className="border-border/50 h-full min-h-[750px] lg:min-h-[800px] w-full max-w-full rounded-3xl shadow-sm bg-background/50 flex items-center justify-center border-dashed border-2">
+        <CardContent className="flex flex-col items-center justify-center h-full text-center p-12">
+          <div className="relative mb-8">
+            <div className="absolute inset-0 bg-primary/10 blur-3xl rounded-full scale-150 animate-pulse" />
+            <div className="relative flex items-center justify-center h-48 w-48 rounded-3xl bg-white shadow-2xl shadow-primary/10 border border-primary/5">
+              <svg viewBox="0 0 24 24" fill="none" className="w-24 h-24 text-primary/20">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" stroke="currentColor" strokeWidth="1" />
+                <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" />
+                <path d="M21 15l-5-5L5 21" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <div className="absolute -top-4 -right-4 h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center animate-bounce">
+                <Sparkles className="h-6 w-6 text-primary" />
+              </div>
+            </div>
           </div>
-          <p className="text-sm font-medium text-foreground">No image selected</p>
-          <p className="text-xs text-muted-foreground mt-1">Upload an image to start</p>
+          <h3 className="text-2xl font-bold text-foreground mb-2">No image selected</h3>
+          <p className="text-sm text-muted-foreground max-w-[250px] mx-auto mb-8 font-medium">
+            Upload an image to start editing and optimizing your visuals
+          </p>
+          <Button 
+            className="rounded-full px-8 py-6 h-auto text-base"
+            onClick={() => document.getElementById("file-input")?.click()}
+          >
+            <Upload className="h-5 w-5 mr-3" />
+            Choose Image
+          </Button>
+          <p className="text-xs text-muted-foreground/60 mt-4 font-bold uppercase tracking-widest">
+            or drag and drop here
+          </p>
         </CardContent>
       </Card>
     );
@@ -188,7 +213,7 @@ export function ImagePreview({
         </div>
 
         {/* Image Display */}
-        <div className="flex-1 relative overflow-hidden bg-muted/30 min-h-[200px]">
+        <div className="flex-1 relative overflow-hidden bg-muted/30 min-h-[750px] lg:min-h-[800px]">
           {isProcessing ? (
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="flex flex-col items-center gap-3">
@@ -207,16 +232,25 @@ export function ImagePreview({
                 <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
                   <DialogTrigger asChild>
                     <div className="relative group cursor-zoom-in">
-                      <img
-                        src={displayUrl}
-                        alt={image.metadata.name}
-                        className="max-w-full transition-all duration-200 shadow-lg"
-                        style={{
-                          transform: `scale(${zoom})`,
-                          transformOrigin: 'center center',
-                        }}
-                      />
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors rounded-sm" />
+                      {/* Ambient Aura Glow behind the image */}
+                      <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-full scale-90 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                      
+                      <AnimatePresence mode="wait">
+                        <motion.img
+                          key={displayUrl}
+                          initial={{ opacity: 0, scale: 0.98 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 1.02 }}
+                          transition={{ duration: 0.3, ease: "easeOut" }}
+                          src={displayUrl}
+                          alt={image.metadata.name}
+                          className="max-w-full shadow-2xl rounded-lg border border-border/50 relative z-10"
+                          style={{
+                            transform: `scale(${zoom})`,
+                            transformOrigin: 'center center',
+                          }}
+                        />
+                      </AnimatePresence>
                     </div>
                   </DialogTrigger>
                   <DialogContent showCloseButton={false} className="max-w-[95vw] max-h-[95vh] p-0 overflow-hidden bg-background/95 backdrop-blur border-border/60">
@@ -227,8 +261,8 @@ export function ImagePreview({
                       Full size preview of {image.metadata.name}
                     </DialogDescription>
                     
-                    <DialogClose className="absolute top-3 right-3 z-[60] flex h-7 w-7 items-center justify-center rounded-full bg-white/10 backdrop-blur text-white transition-all hover:bg-white/20 focus:outline-none">
-                      <X className="h-3.5 w-3.5" />
+                    <DialogClose className="absolute top-3 right-3 z-[60] flex h-8 w-8 items-center justify-center rounded-full bg-black/40 backdrop-blur text-white transition-all hover:bg-black/60 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-black">
+                      <X className="h-4 w-4" />
                       <span className="sr-only">Close</span>
                     </DialogClose>
 
@@ -251,6 +285,7 @@ export function ImagePreview({
                     </div>
 
                     <div className="flex items-center justify-center w-full h-full p-3 pt-12">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={displayUrl}
                         alt={image.metadata.name}

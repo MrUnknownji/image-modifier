@@ -231,7 +231,9 @@ export async function processImage(
     };
     img.onerror = () => {
       cleanup();
-      reject(new Error('Failed to load image'));
+      if (!signal?.aborted) {
+        reject(new Error('Failed to load image'));
+      }
     };
     img.src = blobUrl;
   });
