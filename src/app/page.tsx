@@ -72,6 +72,7 @@ function ImageModifierApp() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const imageUrlsRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     setMounted(true);
@@ -93,8 +94,12 @@ function ImageModifierApp() {
         img.src = url;
       });
 
+      const id = Math.random().toString(36).substring(7);
+      // Track URL in ref so we can revoke on unmount
+      imageUrlsRef.current.set(id, url);
+
       const processedImage: ProcessedImage = {
-        id: Math.random().toString(36).substring(7),
+        id,
         originalFile: file,
         originalUrl: url,
         processedUrl: null,
@@ -145,7 +150,10 @@ function ImageModifierApp() {
   const handleImageRemove = useCallback((id: string) => {
     setImages((prev) => {
       const img = prev.find(i => i.id === id);
-      if (img?.originalUrl) URL.revokeObjectURL(img.originalUrl);
+      if (img?.originalUrl) {
+        URL.revokeObjectURL(img.originalUrl);
+        imageUrlsRef.current.delete(id);
+      }
       return prev.filter((i) => i.id !== id);
     });
     if (selectedId === id) {
@@ -215,7 +223,7 @@ function ImageModifierApp() {
 
       setIsProcessing(true);
       try {
-        const blob = await processImage(selectedImage, aspectRatio);
+        const blob = await processImage(selectedImage, aspectRatio, currentController.signal);
         if (!currentController.signal.aborted) {
           setProcessedBlob(blob);
         }
@@ -231,9 +239,10 @@ function ImageModifierApp() {
       }
     };
 
-    processSelected();
-    
+    const timeoutId = setTimeout(processSelected, 150);
+
     return () => {
+      clearTimeout(timeoutId);
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
@@ -291,15 +300,13 @@ function ImageModifierApp() {
     };
   }, [handleUndo, handleRedo, handleDownload, handleImageRemove, handleImagesAdd, selectedId]);
 
+  // Revoke all remaining blob URLs only when the component unmounts
   useEffect(() => {
     return () => {
-      images.forEach(img => {
-        if (img.originalUrl) {
-          URL.revokeObjectURL(img.originalUrl);
-        }
-      });
+      imageUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      imageUrlsRef.current.clear();
     };
-  }, [images]);
+  }, []);
 
   return (
     <div className="min-h-screen bg-background font-sans selection:bg-primary/20">

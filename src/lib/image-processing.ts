@@ -111,7 +111,7 @@ export function calculateDimensions(
 
 export async function processImage(
   image: ProcessedImage,
-  aspectRatio: number | null,
+  cropAspectRatio: number | null,
   signal?: AbortSignal
 ): Promise<Blob> {
   const { originalFile, dimensions: originalDimensions, settings } = image;
@@ -120,16 +120,15 @@ export async function processImage(
     originalDimensions.width,
     originalDimensions.height,
     settings,
-    aspectRatio
+    cropAspectRatio
   );
 
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     if (signal?.aborted) {
       reject(new Error('Processing aborted'));
       return;
     }
 
-    const img = new Image();
     let blobUrl: string;
     let shouldRevoke = false;
 
@@ -139,29 +138,64 @@ export async function processImage(
       blobUrl = URL.createObjectURL(originalFile);
       shouldRevoke = true;
     }
-    
+
     function cleanup() {
       if (shouldRevoke) {
         URL.revokeObjectURL(blobUrl);
       }
-      signal?.removeEventListener('abort', abortHandler);
     }
 
-    function abortHandler() {
-      cleanup();
-      img.src = '';
-      reject(new Error('Processing aborted'));
-    }
+    const img = document.createElement('img');
+    img.crossOrigin = 'anonymous';
     
-    signal?.addEventListener('abort', abortHandler);
-    
-    img.onload = () => {
-      cleanup();
+    const loadImage = async (url: string, retries = 2): Promise<HTMLImageElement> => {
+      for (let i = 0; i <= retries; i++) {
+        try {
+          await new Promise<void>((resolve, reject) => {
+            if (signal?.aborted) return reject(new Error('Processing aborted'));
+            
+            const handleAbort = () => {
+              img.onload = null;
+              img.onerror = null;
+              img.src = '';
+              reject(new Error('Processing aborted'));
+            };
+            
+            signal?.addEventListener('abort', handleAbort, { once: true });
+            
+            img.onload = () => {
+              signal?.removeEventListener('abort', handleAbort);
+              resolve();
+            };
+            
+            img.onerror = () => {
+              signal?.removeEventListener('abort', handleAbort);
+              reject(new Error('Load failed'));
+            };
+            
+            img.src = url;
+          });
+          
+          await img.decode();
+          return img;
+        } catch (err) {
+          if ((err as Error).message === 'Processing aborted') throw err;
+          if (i === retries) throw err;
+          await new Promise(r => setTimeout(r, 50 * (i + 1)));
+        }
+      }
+      throw new Error('Failed after retries');
+    };
+
+    try {
+      await loadImage(blobUrl);
       
       if (signal?.aborted) {
         reject(new Error('Processing aborted'));
         return;
       }
+
+      cleanup(); // Cleanup listeners and revoke if necessary
 
       const { rotation = 0, flipHorizontal = false, flipVertical = false } = settings;
       const radians = (rotation * Math.PI) / 180;
@@ -191,7 +225,7 @@ export async function processImage(
       ctx.rotate(radians);
       ctx.scale(flipHorizontal ? -1 : 1, flipVertical ? -1 : 1);
 
-      if (aspectRatio !== null && settings.maintainAspectRatio) {
+      if (cropAspectRatio !== null && settings.maintainAspectRatio) {
         const originalRatio = originalDimensions.width / originalDimensions.height;
         const targetRatio = targetDimensions.width / targetDimensions.height;
         
@@ -228,14 +262,15 @@ export async function processImage(
         mimeType,
         quality
       );
-    };
-    img.onerror = () => {
+    } catch (error) {
       cleanup();
-      if (!signal?.aborted) {
-        reject(new Error('Failed to load image'));
+      if ((error as Error).message === 'Processing aborted' || signal?.aborted) {
+        reject(new Error('Processing aborted'));
+      } else {
+        const errorMsg = `Failed to load image "${image.metadata.name}". The source URL may be invalid or the format unsupported.`;
+        reject(new Error(errorMsg));
       }
-    };
-    img.src = blobUrl;
+    }
   });
 }
 
