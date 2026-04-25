@@ -104,8 +104,8 @@ export function ImagePreview({
         <CardContent className="flex flex-col items-center justify-center h-full text-center p-12">
           <div className="relative mb-8">
             <div className="absolute inset-0 bg-primary/10 blur-3xl rounded-full scale-150 animate-pulse" />
-            <div className="relative flex items-center justify-center h-48 w-48 rounded-3xl bg-white shadow-2xl shadow-primary/10 border border-primary/5">
-              <svg viewBox="0 0 24 24" fill="none" className="w-24 h-24 text-primary/20">
+            <div className="relative flex items-center justify-center h-48 w-48 rounded-3xl bg-muted/30 shadow-2xl shadow-primary/5 border border-primary/20 backdrop-blur-sm">
+              <svg viewBox="0 0 24 24" fill="none" className="w-24 h-24 text-primary/40">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2" stroke="currentColor" strokeWidth="1" />
                 <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" />
                 <path d="M21 15l-5-5L5 21" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />

@@ -56,7 +56,7 @@ export function ImageUploader({
   return (
     <div className="space-y-3 w-full max-w-full">
       <Card
-        className="relative border-2 border-dashed border-primary/20 bg-primary/5 p-8 text-center transition-all duration-300 hover:border-primary/40 hover:bg-primary/10 cursor-pointer group w-full max-w-full rounded-2xl"
+        className="relative border-2 border-dashed border-primary/30 bg-primary/10 p-8 text-center transition-all duration-300 hover:border-primary/50 hover:bg-primary/15 cursor-pointer group w-full max-w-full rounded-2xl"
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onClick={() => document.getElementById("file-input")?.click()}
@@ -75,7 +75,7 @@ export function ImageUploader({
           </div>
           <div className="flex flex-wrap items-center justify-center gap-2 text-[10px] text-muted-foreground font-bold tracking-wider">
             {["JPG", "PNG", "WEBP", "GIF", "BMP", "TIFF"].map((ext) => (
-              <span key={ext} className="px-2 py-1 bg-background/50 rounded-md border border-border/50">
+              <span key={ext} className="px-2 py-1 bg-background/80 rounded-md border border-border">
                 {ext}
               </span>
             ))}
