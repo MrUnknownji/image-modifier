@@ -145,7 +145,7 @@ export async function processImage(
       }
     }
 
-    const img = document.createElement('img');
+    const img = new Image();
     img.crossOrigin = 'anonymous';
     
     const loadImage = async (url: string, retries = 2): Promise<HTMLImageElement> => {
@@ -289,12 +289,15 @@ export async function createProcessedImage(file: File): Promise<ProcessedImage> 
     extractEXIF(file),
   ]);
 
+  const fileSubtype = file.type.split('/')[1]?.toLowerCase();
+  const format = fileSubtype === 'png' || fileSubtype === 'webp' ? fileSubtype : 'jpeg';
+
   const settings: ImageSettings = {
     width: dimensions.width,
     height: dimensions.height,
     maintainAspectRatio: true,
     quality: 85,
-    format: 'jpeg',
+    format,
     dpi: 72,
     preserveMetadata: true,
     filters: {

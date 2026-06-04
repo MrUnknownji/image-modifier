@@ -1,3 +1,12 @@
+@import "@fontsource/inter/latin-400.css";
+@import "@fontsource/inter/latin-500.css";
+@import "@fontsource/inter/latin-600.css";
+@import "@fontsource/inter/latin-700.css";
+@import "@fontsource/inter/latin-800.css";
+@import "@fontsource/outfit/latin-500.css";
+@import "@fontsource/outfit/latin-600.css";
+@import "@fontsource/outfit/latin-700.css";
+@import "@fontsource/outfit/latin-800.css";
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -38,7 +47,7 @@
   --sidebar-ring: oklch(0.55 0.2 270);
   --font-sans: "Inter", "Outfit", sans-serif;
   --font-serif: "Libre Baskerville", serif;
-  --font-mono: "IBM Plex Mono", monospace;
+  --font-mono: "SFMono-Regular", "Cascadia Code", "Roboto Mono", Consolas, "Liberation Mono", monospace;
   --radius: 0.75rem;
   --shadow-x: 0px;
   --shadow-y: 4px;

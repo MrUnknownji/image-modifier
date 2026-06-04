@@ -2,11 +2,14 @@
   "name": "image-modifier",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-specifier-resolution=node --test src/lib/*.test.ts"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",

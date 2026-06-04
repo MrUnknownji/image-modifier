@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from 'next-themes';
 import { ImagePlus, Sparkles, Shield, Zap, Image as ImageIcon, Check, Lock, Cpu, Layers, Palette, Wand2, FileImage, HardDrive, Globe, Sun, Moon } from 'lucide-react';
@@ -26,7 +26,7 @@ import { ImageUploader } from '@/components/image-modifier/image-uploader';
 import { ImageSettingsPanel } from '@/components/image-modifier/image-settings-panel';
 import { ImagePreview } from '@/components/image-modifier/image-preview';
 import { BatchProcessor } from '@/components/image-modifier/batch-processor';
-import { processImage } from '@/lib/image-processing';
+import { createProcessedImage, processImage } from '@/lib/image-processing';
 import type { ProcessedImage, ImageSettings } from '@/types/image';
 
 // Error boundary component for the whole app
@@ -58,8 +58,6 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
   }
 }
 
-import React from 'react';
-
 function ImageModifierApp() {
   const [images, setImages] = useState<ProcessedImage[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -81,85 +79,65 @@ function ImageModifierApp() {
   const selectedImage = images.find((img) => img.id === selectedId) || null;
 
   const handleImagesAdd = useCallback(async (files: FileList) => {
-    const newImages: ProcessedImage[] = [];
-    
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const url = URL.createObjectURL(file);
-      
-      // Get image dimensions
-      const img = new Image();
-      const dimensions = await new Promise<{ width: number; height: number }>((resolve) => {
-        img.onload = () => resolve({ width: img.width, height: img.height });
-        img.src = url;
-      });
+    const imageFiles = Array.from(files).filter((file) => file.type.startsWith('image/'));
 
-      const id = Math.random().toString(36).substring(7);
-      // Track URL in ref so we can revoke on unmount
-      imageUrlsRef.current.set(id, url);
-
-      const processedImage: ProcessedImage = {
-        id,
-        originalFile: file,
-        originalUrl: url,
-        processedUrl: null,
-        metadata: {
-          name: file.name,
-          type: file.type,
-          size: file.size,
-          lastModified: file.lastModified,
-        },
-        dimensions,
-        exif: null,
-        settings: {
-          format: (['jpeg', 'jpg', 'png', 'webp'].includes(file.type.split('/')[1]) ? file.type.split('/')[1].replace('jpg', 'jpeg') : 'webp') as 'jpeg' | 'png' | 'webp',
-          quality: 80,
-          width: dimensions.width,
-          height: dimensions.height,
-          maintainAspectRatio: true,
-          preserveMetadata: true,
-          dpi: 72,
-          rotation: 0,
-          flipHorizontal: false,
-          flipVertical: false,
-          filters: {
-            brightness: 100,
-            contrast: 100,
-            saturation: 100,
-            grayscale: 0,
-            sepia: 0,
-            blur: 0,
-            hueRotate: 0,
-          },
-        },
-        history: [],
-        historyIndex: -1,
-      };
-      
-      newImages.push(processedImage);
+    if (imageFiles.length === 0) {
+      toast.error('Please choose valid image files');
+      return;
     }
+
+    const maxFileSize = 25 * 1024 * 1024;
+    const oversizedFiles = imageFiles.filter((file) => file.size > maxFileSize);
+    const validFiles = imageFiles.filter((file) => file.size <= maxFileSize);
+
+    if (oversizedFiles.length > 0) {
+      toast.error(`${oversizedFiles.length} image(s) exceeded the 25MB limit and were skipped`);
+    }
+
+    if (validFiles.length === 0) return;
+
+    const results = await Promise.allSettled(validFiles.map((file) => createProcessedImage(file)));
+    const newImages = results
+      .filter((result): result is PromiseFulfilledResult<ProcessedImage> => result.status === 'fulfilled')
+      .map((result) => result.value);
+    const failedCount = results.length - newImages.length;
+
+    if (failedCount > 0) {
+      toast.error(`${failedCount} image(s) could not be loaded and were skipped`);
+    }
+
+    if (newImages.length === 0) return;
+
+    newImages.forEach((image) => {
+      imageUrlsRef.current.set(image.id, image.originalUrl);
+    });
 
     setImages((prev) => [...prev, ...newImages]);
-    if (!selectedId && newImages.length > 0) {
-      setSelectedId(newImages[0].id);
-    }
-    
+    setSelectedId((current) => current ?? newImages[0].id);
     toast.success(`Added ${newImages.length} image(s)`);
-  }, [selectedId]);
+  }, []);
 
   const handleImageRemove = useCallback((id: string) => {
     setImages((prev) => {
-      const img = prev.find(i => i.id === id);
-      if (img?.originalUrl) {
-        URL.revokeObjectURL(img.originalUrl);
+      const imageIndex = prev.findIndex((image) => image.id === id);
+      if (imageIndex === -1) return prev;
+
+      const image = prev[imageIndex];
+      if (image.originalUrl) {
+        URL.revokeObjectURL(image.originalUrl);
         imageUrlsRef.current.delete(id);
       }
-      return prev.filter((i) => i.id !== id);
+
+      const remainingImages = prev.filter((item) => item.id !== id);
+      setSelectedId((current) => {
+        if (current !== id) return current;
+        return remainingImages[imageIndex]?.id ?? remainingImages[imageIndex - 1]?.id ?? null;
+      });
+
+      return remainingImages;
     });
-    if (selectedId === id) {
-      setSelectedId(null);
-      setProcessedBlob(null);
-    }
+
+    setProcessedBlob((current) => (selectedId === id ? null : current));
   }, [selectedId]);
 
   const handleSettingsChange = useCallback((settings: ImageSettings) => {
@@ -302,9 +280,11 @@ function ImageModifierApp() {
 
   // Revoke all remaining blob URLs only when the component unmounts
   useEffect(() => {
+    const trackedUrls = imageUrlsRef.current;
+
     return () => {
-      imageUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
-      imageUrlsRef.current.clear();
+      trackedUrls.forEach((url) => URL.revokeObjectURL(url));
+      trackedUrls.clear();
     };
   }, []);
 

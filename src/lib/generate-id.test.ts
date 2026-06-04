@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { generateId } from './image-processing';
+import { generateId } from './image-processing.ts';
 
 describe('generateId', () => {
   it('should generate an ID with the correct format (timestamp-UUID)', () => {
