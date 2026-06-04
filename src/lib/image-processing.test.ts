@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, before, after, beforeEach, mock } from 'node:test';
 import assert from 'node:assert';
-import { formatFileSize, calculateDimensions, calculateDimensionUpdate, processImage } from './image-processing';
+import { formatFileSize, calculateDimensions, calculateDimensionUpdate, processImage } from './image-processing.ts';
 import type { ImageSettings, ProcessedImage } from '../types/image';
 
 const DEFAULT_SETTINGS: ImageSettings = {
@@ -276,6 +276,7 @@ describe('processImage', () => {
         }
       }
       get src() { return this._src; }
+      async decode() {}
     } as any;
 
     // Mock Document
@@ -472,7 +473,7 @@ describe('processImage', () => {
 
     await assert.rejects(
         processImage(image, null),
-        { message: 'Failed to load image' }
+        { message: 'Failed to load image \"test.jpg\". The source URL may be invalid or the format unsupported.' }
     );
   });
 

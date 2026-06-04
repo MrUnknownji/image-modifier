@@ -64,7 +64,7 @@ function pLimit(concurrency) {
         }
     };
 
-    const generator = (fn, ...args) =>
+    const generator = (fn) =>
         new Promise((resolve, reject) => {
             enqueue(fn, resolve, reject);
         });

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, mock, before, after } from 'node:test';
 import assert from 'node:assert';
-import { processImage } from './image-processing';
+import { processImage } from './image-processing.ts';
 import type { ProcessedImage } from '../types/image';
 
 // --- Mocks ---
@@ -14,7 +14,7 @@ const originalFile = global.File;
 
 // Mock Blob
 class MockBlob {
-  constructor(_content: any[], _options?: any) {}
+  constructor() {}
 }
 
 // Mock File
@@ -23,16 +23,16 @@ class MockFile extends MockBlob {
   lastModified: number;
   size: number = 0;
   type: string = '';
-  constructor(content: any[], name: string, options?: any) {
-    super(content, options);
+  constructor(content: any[], name: string) {
+    super();
     this.name = name;
     this.lastModified = Date.now();
   }
 }
 
 // Mock URL
-const mockCreateObjectURL = mock.fn((_obj: any) => 'blob:mock-created-url');
-const mockRevokeObjectURL = mock.fn((_url: string) => {});
+const mockCreateObjectURL = mock.fn(() => 'blob:mock-created-url');
+const mockRevokeObjectURL = mock.fn(() => {});
 
 // Mock Image
 class MockImage {
@@ -50,7 +50,9 @@ class MockImage {
     });
   }
   get src() { return this._src; }
+  async decode() {}
 }
+
 
 // Mock Canvas Context
 const mockContext = {
@@ -70,11 +72,14 @@ const mockDocument = {
       return {
         width: 0,
         height: 0,
-        getContext: (_type: string) => mockContext,
-        toBlob: (callback: (blob: Blob | null) => void, _type: string, _quality?: number) => {
-          callback(new MockBlob(['mock-data']) as any);
+        getContext: () => mockContext,
+        toBlob: (callback: (blob: Blob | null) => void) => {
+          callback(new MockBlob() as any);
         }
       };
+    }
+    if (tag === 'img') {
+      return new MockImage();
     }
     return {};
   }
@@ -161,7 +166,7 @@ describe('processImage optimization', () => {
     assert.strictEqual(mockCreateObjectURL.mock.calls.length, 0, 'Expected URL.createObjectURL to NOT be called when originalUrl is present');
 
     // Also verify we didn't revoke the existing URL
-    const revokeCallsForExisting = mockRevokeObjectURL.mock.calls.filter(call => call.arguments[0] === existingUrl);
+    const revokeCallsForExisting = mockRevokeObjectURL.mock.calls.filter((call) => (call.arguments as unknown[])[0] === existingUrl);
     assert.strictEqual(revokeCallsForExisting.length, 0, 'Expected URL.revokeObjectURL to NOT be called for the reused URL');
   });
 });
