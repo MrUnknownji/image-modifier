@@ -23,7 +23,7 @@ export default function RootLayout({
       <body
         className="font-sans antialiased"
       >
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
           <TooltipProvider>
             {children}
           </TooltipProvider>
