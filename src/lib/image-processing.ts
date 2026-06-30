@@ -1,5 +1,13 @@
-import type { ImageDimensions, ImageSettings, EXIFData, ProcessedImage } from '../types/image';
-import exifr from 'exifr';
+import {
+  MAX_IMAGE_DIMENSION,
+  MAX_IMAGE_FILE_SIZE,
+  MAX_IMAGE_PIXELS,
+  SUPPORTED_IMAGE_TYPES,
+  type ImageDimensions,
+  type ImageSettings,
+  type EXIFData,
+  type ProcessedImage,
+} from '../types/image';
 
 export function generateId(): string {
   return `${Date.now()}-${crypto.randomUUID()}`;
@@ -11,6 +19,35 @@ export function formatFileSize(bytes: number): string {
   const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+}
+
+export function validateImageFile(file: File): string | null {
+  if (!SUPPORTED_IMAGE_TYPES.includes(file.type as (typeof SUPPORTED_IMAGE_TYPES)[number])) {
+    return `${file.name || 'This file'} is not a supported JPG, PNG, WebP, GIF, or BMP image.`;
+  }
+
+  if (file.size <= 0) {
+    return `${file.name || 'This file'} is empty.`;
+  }
+
+  if (file.size > MAX_IMAGE_FILE_SIZE) {
+    return `${file.name} is larger than the ${formatFileSize(MAX_IMAGE_FILE_SIZE)} limit.`;
+  }
+
+  return null;
+}
+
+export function sanitizeBaseName(filename: string): string {
+  const leafName = filename.split('/').pop()?.split('\\').pop() || 'image';
+  const withoutExtension = leafName.replace(/\.[^/.]+$/, '');
+  const sanitized = withoutExtension
+    .replace(/[\u0000-\u001f\u007f<>:"/\\|?*]+/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/[-_.]{2,}/g, '-')
+    .replace(/^[-.\s]+|[-.\s]+$/g, '')
+    .slice(0, 80);
+
+  return sanitized || 'image';
 }
 
 export async function getImageDimensions(file: File): Promise<ImageDimensions> {
@@ -42,6 +79,7 @@ export async function getImageDimensions(file: File): Promise<ImageDimensions> {
 
 export async function extractEXIF(file: File): Promise<EXIFData | null> {
   try {
+    const { default: exifr } = await import('exifr');
     const exif = await exifr.parse(file, [
       'Make',
       'Model',
@@ -123,7 +161,19 @@ export async function processImage(
     cropAspectRatio
   );
 
-  return new Promise(async (resolve, reject) => {
+  if (
+    targetDimensions.width < 1 ||
+    targetDimensions.height < 1 ||
+    targetDimensions.width > MAX_IMAGE_DIMENSION ||
+    targetDimensions.height > MAX_IMAGE_DIMENSION ||
+    targetDimensions.width * targetDimensions.height > MAX_IMAGE_PIXELS
+  ) {
+    throw new Error(
+      `Output dimensions exceed the safe ${MAX_IMAGE_DIMENSION}px / ${Math.round(MAX_IMAGE_PIXELS / 1_000_000)}MP limit.`
+    );
+  }
+
+  return new Promise((resolve, reject) => {
     if (signal?.aborted) {
       reject(new Error('Processing aborted'));
       return;
@@ -146,7 +196,6 @@ export async function processImage(
     }
 
     const img = new Image();
-    img.crossOrigin = 'anonymous';
     
     const loadImage = async (url: string, retries = 2): Promise<HTMLImageElement> => {
       for (let i = 0; i <= retries; i++) {
@@ -176,7 +225,9 @@ export async function processImage(
             img.src = url;
           });
           
-          await img.decode();
+          if (typeof img.decode === 'function') {
+            await img.decode();
+          }
           return img;
         } catch (err) {
           if ((err as Error).message === 'Processing aborted') throw err;
@@ -187,90 +238,111 @@ export async function processImage(
       throw new Error('Failed after retries');
     };
 
-    try {
-      await loadImage(blobUrl);
+    void (async () => {
+      try {
+        await loadImage(blobUrl);
       
-      if (signal?.aborted) {
-        reject(new Error('Processing aborted'));
-        return;
-      }
-
-      cleanup(); // Cleanup listeners and revoke if necessary
-
-      const { rotation = 0, flipHorizontal = false, flipVertical = false } = settings;
-      const radians = (rotation * Math.PI) / 180;
-      
-      const sin = Math.abs(Math.sin(radians));
-      const cos = Math.abs(Math.cos(radians));
-      const rotatedWidth = Math.ceil(targetDimensions.width * cos + targetDimensions.height * sin);
-      const rotatedHeight = Math.ceil(targetDimensions.width * sin + targetDimensions.height * cos);
-      
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.min(16384, rotatedWidth));
-      canvas.height = Math.max(1, Math.min(16384, rotatedHeight));
-      
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        reject(new Error('Could not get canvas context'));
-        return;
-      }
-
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-
-      const { brightness = 100, contrast = 100, saturation = 100, grayscale = 0, sepia = 0, blur = 0, hueRotate = 0 } = settings.filters || {};
-      ctx.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%) grayscale(${grayscale}%) sepia(${sepia}%) blur(${blur}px) hue-rotate(${hueRotate}deg)`;
-
-      ctx.translate(canvas.width / 2, canvas.height / 2);
-      ctx.rotate(radians);
-      ctx.scale(flipHorizontal ? -1 : 1, flipVertical ? -1 : 1);
-
-      if (cropAspectRatio !== null && settings.maintainAspectRatio) {
-        const originalRatio = originalDimensions.width / originalDimensions.height;
-        const targetRatio = targetDimensions.width / targetDimensions.height;
-        
-        let sx = 0, sy = 0, sWidth = originalDimensions.width, sHeight = originalDimensions.height;
-        
-        if (originalRatio > targetRatio) {
-          sWidth = originalDimensions.height * targetRatio;
-          sx = (originalDimensions.width - sWidth) / 2;
-        } else if (targetRatio > 0) {
-          sHeight = originalDimensions.width / targetRatio;
-          sy = (originalDimensions.height - sHeight) / 2;
+        if (signal?.aborted) {
+          reject(new Error('Processing aborted'));
+          return;
         }
-        
-        ctx.drawImage(
-          img,
-          sx, sy, sWidth, sHeight,
-          -targetDimensions.width / 2, -targetDimensions.height / 2, targetDimensions.width, targetDimensions.height
-        );
-      } else {
-        ctx.drawImage(img, -targetDimensions.width / 2, -targetDimensions.height / 2, targetDimensions.width, targetDimensions.height);
-      }
 
-      const mimeType = `image/${settings.format}`;
-      const quality = settings.format === 'png' ? undefined : settings.quality / 100;
+        cleanup();
+
+        const { rotation = 0, flipHorizontal = false, flipVertical = false } = settings;
+        const radians = (rotation * Math.PI) / 180;
       
-      canvas.toBlob(
-        (blob) => {
-          if (blob) {
-            resolve(blob);
-          } else {
-            reject(new Error('Failed to create blob'));
+        const sin = Math.abs(Math.sin(radians));
+        const cos = Math.abs(Math.cos(radians));
+        const rotatedWidth = Math.ceil(targetDimensions.width * cos + targetDimensions.height * sin);
+        const rotatedHeight = Math.ceil(targetDimensions.width * sin + targetDimensions.height * cos);
+
+        if (
+          rotatedWidth > MAX_IMAGE_DIMENSION ||
+          rotatedHeight > MAX_IMAGE_DIMENSION ||
+          rotatedWidth * rotatedHeight > MAX_IMAGE_PIXELS
+        ) {
+          reject(new Error('Rotated output exceeds the safe browser processing limit.'));
+          return;
+        }
+      
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, rotatedWidth);
+        canvas.height = Math.max(1, rotatedHeight);
+      
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Could not get canvas context'));
+          return;
+        }
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+
+        const { brightness = 100, contrast = 100, saturation = 100, grayscale = 0, sepia = 0, blur = 0, hueRotate = 0 } = settings.filters || {};
+        ctx.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%) grayscale(${grayscale}%) sepia(${sepia}%) blur(${blur}px) hue-rotate(${hueRotate}deg)`;
+
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate(radians);
+        ctx.scale(flipHorizontal ? -1 : 1, flipVertical ? -1 : 1);
+
+        if (cropAspectRatio !== null && settings.maintainAspectRatio) {
+          const originalRatio = originalDimensions.width / originalDimensions.height;
+          const targetRatio = targetDimensions.width / targetDimensions.height;
+        
+          let sx = 0, sy = 0, sWidth = originalDimensions.width, sHeight = originalDimensions.height;
+        
+          if (originalRatio > targetRatio) {
+            sWidth = originalDimensions.height * targetRatio;
+            sx = (originalDimensions.width - sWidth) / 2;
+          } else if (targetRatio > 0) {
+            sHeight = originalDimensions.width / targetRatio;
+            sy = (originalDimensions.height - sHeight) / 2;
           }
-        },
-        mimeType,
-        quality
-      );
-    } catch (error) {
-      cleanup();
-      if ((error as Error).message === 'Processing aborted' || signal?.aborted) {
-        reject(new Error('Processing aborted'));
-      } else {
-        const errorMsg = `Failed to load image "${image.metadata.name}". The source URL may be invalid or the format unsupported.`;
-        reject(new Error(errorMsg));
+        
+          ctx.drawImage(
+            img,
+            sx, sy, sWidth, sHeight,
+            -targetDimensions.width / 2, -targetDimensions.height / 2, targetDimensions.width, targetDimensions.height
+          );
+        } else {
+          ctx.drawImage(img, -targetDimensions.width / 2, -targetDimensions.height / 2, targetDimensions.width, targetDimensions.height);
+        }
+
+        const mimeType = `image/${settings.format}`;
+        const quality = settings.format === 'png' ? undefined : settings.quality / 100;
+      
+        canvas.toBlob(
+          (blob) => {
+            canvas.width = 1;
+            canvas.height = 1;
+
+            if (signal?.aborted) {
+              reject(new Error('Processing aborted'));
+            } else if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error('Failed to create blob'));
+            }
+          },
+          mimeType,
+          quality
+        );
+      } catch (error) {
+        cleanup();
+        if ((error as Error).message === 'Processing aborted' || signal?.aborted) {
+          reject(new Error('Processing aborted'));
+        } else if ((error as Error).message === 'Load failed') {
+          reject(
+            new Error(
+              `Failed to load image "${image.metadata.name}". The source URL may be invalid or the format unsupported.`
+            )
+          );
+        } else {
+          reject(error instanceof Error ? error : new Error(`Failed to process "${image.metadata.name}".`));
+        }
       }
-    }
+    })();
   });
 }
 
@@ -284,22 +356,38 @@ export function downloadImage(url: string, filename: string) {
 }
 
 export async function createProcessedImage(file: File): Promise<ProcessedImage> {
+  const validationError = validateImageFile(file);
+  if (validationError) {
+    throw new Error(validationError);
+  }
+
   const [dimensions, exif] = await Promise.all([
     getImageDimensions(file),
     extractEXIF(file),
   ]);
 
-  const fileSubtype = file.type.split('/')[1]?.toLowerCase();
-  const format = fileSubtype === 'png' || fileSubtype === 'webp' ? fileSubtype : 'jpeg';
+  if (
+    dimensions.width < 1 ||
+    dimensions.height < 1 ||
+    dimensions.width > MAX_IMAGE_DIMENSION ||
+    dimensions.height > MAX_IMAGE_DIMENSION ||
+    dimensions.width * dimensions.height > MAX_IMAGE_PIXELS
+  ) {
+    throw new Error(
+      `${file.name} exceeds the safe ${MAX_IMAGE_DIMENSION}px / ${Math.round(MAX_IMAGE_PIXELS / 1_000_000)}MP image limit.`
+    );
+  }
 
   const settings: ImageSettings = {
     width: dimensions.width,
     height: dimensions.height,
     maintainAspectRatio: true,
     quality: 85,
-    format,
+    format: (['image/jpeg', 'image/png', 'image/webp'].includes(file.type)
+      ? file.type.replace('image/', '').replace('jpg', 'jpeg')
+      : 'webp') as ImageSettings['format'],
     dpi: 72,
-    preserveMetadata: true,
+    preserveMetadata: false,
     filters: {
       brightness: 100,
       contrast: 100,

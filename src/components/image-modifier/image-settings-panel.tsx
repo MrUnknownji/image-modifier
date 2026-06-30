@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import {
   Lock,
   Unlock,
@@ -16,8 +16,8 @@ import {
   RotateCw,
   FlipHorizontal,
   FlipVertical,
-  MapPin,
   ShieldCheck,
+  MapPin,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -66,7 +66,7 @@ const DEFAULT_SETTINGS: ImageSettings = {
   quality: 85,
   format: 'jpeg',
   dpi: 72,
-  preserveMetadata: true,
+  preserveMetadata: false,
   filters: {
     brightness: 100,
     contrast: 100,
@@ -124,6 +124,8 @@ function FilterSlider({ label, value, defaultValue, min, max, step = 1, unit = '
             className="h-6 w-12 text-xs text-right px-1"
             min={min}
             max={max}
+            step={step}
+            aria-label={`${label} value`}
           />
           <span className="text-[10px] text-muted-foreground w-3">{unit}</span>
           {isModified && (
@@ -158,22 +160,12 @@ export function ImageSettingsPanel({
 }: ImageSettingsPanelProps) {
   const [aspectRatio, setAspectRatio] = useState<number | null>(null);
   const [lockRatio, setLockRatio] = useState(true);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const settings = image?.settings ?? DEFAULT_SETTINGS;
 
   const updateSettings = (updates: Partial<ImageSettings>) => {
     if (!image) return;
-    
-    const newSettings = { ...settings, ...updates };
-    
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-    
-    timeoutRef.current = setTimeout(() => {
-      onSettingsChange(newSettings);
-    }, 300);
+    onSettingsChange({ ...settings, ...updates });
   };
 
   const handleDimensionChange = (dimension: 'width' | 'height', value: string) => {
@@ -272,18 +264,9 @@ export function ImageSettingsPanel({
     updateSettings({ flipVertical: !settings.flipVertical });
   };
 
-  const handleStripExif = () => {
-    updateSettings({ preserveMetadata: false });
-  };
-
   const handleQualityChange = (value: string) => {
     const quality = Math.max(1, Math.min(100, parseInt(value) || 85));
     updateSettings({ quality });
-  };
-
-  const handleDpiChange = (value: string) => {
-    const dpi = Math.max(72, Math.min(600, parseInt(value) || 72));
-    updateSettings({ dpi });
   };
 
   const hasGPS = image?.exif?.GPSLatitude && image?.exif?.GPSLongitude;
@@ -326,19 +309,19 @@ export function ImageSettingsPanel({
       <CardContent className="pt-0 px-4 w-full max-w-full">
         <Tabs defaultValue="dimensions" className="space-y-3 w-full max-w-full">
           <TabsList className="grid w-full grid-cols-4 h-8">
-            <TabsTrigger value="dimensions" className="text-xs gap-1">
+            <TabsTrigger value="dimensions" className="text-xs gap-1" aria-label="Size and transform settings">
               <Crop className="h-3 w-3" />
               <span className="hidden sm:inline">Size</span>
             </TabsTrigger>
-            <TabsTrigger value="filters" className="text-xs gap-1">
+            <TabsTrigger value="filters" className="text-xs gap-1" aria-label="Filter settings">
               <Sparkles className="h-3 w-3" />
               <span className="hidden sm:inline">Filters</span>
             </TabsTrigger>
-            <TabsTrigger value="quality" className="text-xs gap-1">
+            <TabsTrigger value="quality" className="text-xs gap-1" aria-label="Format and quality settings">
               <Monitor className="h-3 w-3" />
               <span className="hidden sm:inline">Quality</span>
             </TabsTrigger>
-            <TabsTrigger value="metadata" className="text-xs gap-1">
+            <TabsTrigger value="metadata" className="text-xs gap-1" aria-label="Metadata privacy">
               <FileImage className="h-3 w-3" />
               <span className="hidden sm:inline">Meta</span>
             </TabsTrigger>
@@ -437,6 +420,7 @@ export function ImageSettingsPanel({
                     size="icon"
                     className="h-6 w-6"
                     onClick={() => setLockRatio(!lockRatio)}
+                    aria-label={lockRatio ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
                   >
                     {lockRatio ? (
                       <Lock className="h-3 w-3 text-primary" />
@@ -449,6 +433,7 @@ export function ImageSettingsPanel({
                     size="icon"
                     className="h-6 w-6"
                     onClick={resetToOriginal}
+                    aria-label="Reset to original dimensions"
                   >
                     <RefreshCcw className="h-3 w-3" />
                   </Button>
@@ -466,6 +451,7 @@ export function ImageSettingsPanel({
                     className="h-8 text-sm"
                     min={1}
                     max={MAX_IMAGE_DIMENSION}
+                    aria-label="Output width"
                   />
                 </div>
                 <div className="space-y-1">
@@ -478,6 +464,7 @@ export function ImageSettingsPanel({
                     className="h-8 text-sm"
                     min={1}
                     max={MAX_IMAGE_DIMENSION}
+                    aria-label="Output height"
                   />
                 </div>
               </div>
@@ -641,6 +628,7 @@ export function ImageSettingsPanel({
                       className="h-6 w-12 text-xs text-right px-1"
                       min={1}
                       max={100}
+                      aria-label="Output quality"
                     />
                     <span className="text-[10px] text-muted-foreground">%</span>
                     {settings.quality !== 85 && (
@@ -649,6 +637,7 @@ export function ImageSettingsPanel({
                         size="icon"
                         onClick={() => updateSettings({ quality: 85 })}
                         className="h-5 w-5 p-0 hover:bg-muted"
+                        aria-label="Reset output quality"
                       >
                         <RotateCcw className="h-2.5 w-2.5 text-muted-foreground" />
                       </Button>
@@ -669,105 +658,30 @@ export function ImageSettingsPanel({
               </div>
             )}
 
-            <Separator />
-
-            <div className="space-y-2 w-full max-w-full">
-              <div className="flex items-center justify-between w-full">
-                <Label className="text-[11px] font-medium">DPI (Resolution)</Label>
-                <div className="flex items-center gap-1">
-                  <Input
-                    type="number"
-                    value={settings.dpi}
-                    onChange={(e) => handleDpiChange(e.target.value)}
-                    className="h-6 w-12 text-xs text-right px-1"
-                    min={72}
-                    max={600}
-                  />
-                  <span className="text-[10px] text-muted-foreground">DPI</span>
-                  {settings.dpi !== 72 && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => updateSettings({ dpi: 72 })}
-                      className="h-5 w-5 p-0 hover:bg-muted"
-                    >
-                      <RotateCcw className="h-2.5 w-2.5 text-muted-foreground" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-              <Slider
-                value={[settings.dpi]}
-                onValueChange={([value]) => updateSettings({ dpi: value })}
-                min={72}
-                max={600}
-                step={1}
-                className="w-full"
-              />
-              <div className="flex gap-1 w-full">
-                {[72, 150, 300, 600].map((dpi) => (
-                  <Button
-                    key={dpi}
-                    variant={settings.dpi === dpi ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => updateSettings({ dpi })}
-                    className="flex-1 h-6 text-xs"
-                  >
-                    {dpi}
-                  </Button>
-                ))}
-              </div>
-            </div>
           </TabsContent>
 
           <TabsContent value="metadata" className="space-y-3 mt-2 w-full max-w-full">
-            {hasGPS && settings.preserveMetadata && (
-              <Alert className="border-amber-500/50 bg-amber-500/10">
-                <MapPin className="h-4 w-4 text-amber-500" />
-                <AlertDescription className="text-xs">
-                  <span className="font-medium">GPS data detected!</span>
-                  <br />
-                  This image contains location data. Consider removing metadata before sharing.
-                  <Button
-                    variant="link"
-                    size="sm"
-                    onClick={handleStripExif}
-                    className="h-auto p-0 ml-1 text-amber-600 dark:text-amber-400"
-                  >
-                    Remove metadata
-                  </Button>
-                </AlertDescription>
-              </Alert>
-            )}
+            <Alert className="border-emerald-500/30 bg-emerald-500/10">
+              <ShieldCheck className="h-4 w-4 text-emerald-600" />
+              <AlertDescription className="text-xs leading-relaxed text-emerald-700 dark:text-emerald-300">
+                <span className="font-semibold">Privacy-safe export</span>
+                <br />
+                AuraEdit re-encodes every output without EXIF metadata, including GPS and camera details.
+              </AlertDescription>
+            </Alert>
 
             <div className="space-y-3">
-              <div className="flex items-start gap-2">
-                <Checkbox
-                  id="preserve-metadata"
-                  checked={settings.preserveMetadata}
-                  onCheckedChange={(checked) =>
-                    updateSettings({ preserveMetadata: checked as boolean })
-                  }
-                />
-                <div className="grid gap-1.5 leading-none">
-                  <Label htmlFor="preserve-metadata" className="text-xs font-medium cursor-pointer">
-                    Preserve EXIF metadata
-                  </Label>
-                  <p className="text-[10px] text-muted-foreground">
-                    Keep camera info, GPS, and other metadata in the output
+              {hasGPS && (
+                <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                  <p className="text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+                    Location data exists in the original file. It will not be included in the export.
                   </p>
-                </div>
-              </div>
-
-              {!settings.preserveMetadata && (
-                <div className="flex items-center gap-2 p-2 bg-green-500/10 rounded-md border border-green-500/30">
-                  <ShieldCheck className="h-4 w-4 text-green-500" />
-                  <span className="text-xs text-green-600 dark:text-green-400">Metadata will be removed from output</span>
                 </div>
               )}
 
               {image.exif && Object.keys(image.exif).length > 0 && (
-                <div className="mt-4 p-3 bg-muted/50 rounded-lg border border-border/60">
+                <div className="rounded-lg border border-border/60 bg-muted/50 p-3">
                   <p className="text-xs font-medium mb-2.5 flex items-center gap-1.5">
                     <FileImage className="h-3.5 w-3.5 text-primary" />
                     Detected EXIF Data
@@ -799,6 +713,12 @@ export function ImageSettingsPanel({
                     )}
                   </div>
                 </div>
+              )}
+
+              {(!image.exif || Object.keys(image.exif).length === 0) && (
+                <p className="rounded-lg border border-border/60 bg-muted/30 p-3 text-xs leading-relaxed text-muted-foreground">
+                  No readable EXIF metadata was detected in the original file.
+                </p>
               )}
             </div>
           </TabsContent>

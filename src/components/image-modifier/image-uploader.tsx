@@ -1,17 +1,17 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Upload, X, ImageIcon, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { formatFileSize } from "@/lib/image-processing";
-import type { ProcessedImage } from "@/types/image";
+import { MAX_IMAGE_FILE_SIZE, type ProcessedImage } from "@/types/image";
 
 interface ImageUploaderProps {
   images: ProcessedImage[];
-  onImagesAdd: (files: FileList) => void;
+  onImagesAdd: (files: FileList | File[]) => void | Promise<void>;
   onImageRemove: (id: string) => void;
+  onImagesClear: () => void;
   onImageSelect: (id: string) => void;
   selectedId: string | null;
 }
@@ -20,16 +20,20 @@ export function ImageUploader({
   images,
   onImagesAdd,
   onImageRemove,
+  onImagesClear,
   onImageSelect,
   selectedId,
 }: ImageUploaderProps) {
+  const [isDragging, setIsDragging] = useState(false);
+
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
+      setIsDragging(false);
       const files = e.dataTransfer.files;
       if (files.length > 0) {
-        onImagesAdd(files);
+        void onImagesAdd(Array.from(files));
       }
     },
     [onImagesAdd],
@@ -38,59 +42,71 @@ export function ImageUploader({
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
   }, []);
 
   const handleFileInput = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files.length > 0) {
-        onImagesAdd(e.target.files);
+        const files = Array.from(e.target.files);
+        e.target.value = "";
+        void onImagesAdd(files);
       }
     },
     [onImagesAdd],
   );
 
-  const handleClearAll = () => {
-    images.forEach((img) => onImageRemove(img.id));
-  };
-
   return (
-    <div className="space-y-3 w-full max-w-full">
-      <Card
-        className="relative border-2 border-dashed border-primary/30 bg-primary/10 p-8 text-center transition-all duration-300 hover:border-primary/50 hover:bg-primary/15 cursor-pointer group w-full max-w-full rounded-2xl"
+    <div className="w-full max-w-full space-y-3 px-4 pb-5">
+      <div
+        className={`relative w-full max-w-full rounded-2xl border border-dashed text-center transition-all duration-200 ${
+          isDragging
+            ? "border-primary bg-primary/15 ring-4 ring-primary/10"
+            : "border-primary/35 bg-primary/[0.07] hover:border-primary/60 hover:bg-primary/10"
+        }`}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
-        onClick={() => document.getElementById("file-input")?.click()}
+        onDragLeave={handleDragLeave}
       >
-        <div className="flex flex-col items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-white shadow-lg shadow-primary/20 transition-transform duration-300 group-hover:scale-110">
-            <Upload className="h-5 w-5" />
+        <label
+          htmlFor="file-input"
+          className="group flex cursor-pointer flex-col items-center gap-3 p-5 focus-within:outline-none"
+        >
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 transition-transform duration-200 group-hover:-translate-y-0.5">
+            <Upload className="h-5 w-5" aria-hidden="true" />
           </div>
           <div className="space-y-1">
-            <p className="text-sm font-bold text-foreground">
-              Drag & drop images here
-            </p>
-            <p className="text-xs text-muted-foreground font-medium">
-              or click to browse
+            <p className="text-sm font-bold text-foreground">Drop images here</p>
+            <p className="text-xs font-medium text-muted-foreground">
+              or <span className="text-primary">browse files</span>
             </p>
           </div>
-          <div className="flex flex-wrap items-center justify-center gap-2 text-[10px] text-muted-foreground font-bold tracking-wider">
-            {["JPG", "PNG", "WEBP", "GIF", "BMP", "TIFF"].map((ext) => (
-              <span key={ext} className="px-2 py-1 bg-background/80 rounded-md border border-border">
+          <div className="flex flex-wrap items-center justify-center gap-1.5 text-[9px] font-bold tracking-wider text-muted-foreground">
+            {["JPG", "PNG", "WEBP", "GIF", "BMP"].map((ext) => (
+              <span key={ext} className="rounded-md border border-border/80 bg-background/80 px-1.5 py-0.5">
                 {ext}
               </span>
             ))}
           </div>
-          <p className="text-[10px] text-muted-foreground/60 font-medium pt-2">Max file size: 25MB per image</p>
-        </div>
-        <input
-          id="file-input"
-          type="file"
-          multiple
-          accept="image/*"
-          className="hidden"
-          onChange={handleFileInput}
-        />
-      </Card>
+          <p className="text-[10px] font-medium text-muted-foreground/70">
+            Up to {formatFileSize(MAX_IMAGE_FILE_SIZE)} each
+          </p>
+          <input
+            id="file-input"
+            type="file"
+            multiple
+            accept="image/jpeg,image/png,image/webp,image/gif,image/bmp"
+            className="sr-only"
+            onChange={handleFileInput}
+          />
+        </label>
+      </div>
 
       {images.length > 0 && (
         <div className="space-y-3 pt-4">
@@ -105,7 +121,7 @@ export function ImageUploader({
               variant="ghost"
               size="sm"
               className="h-7 px-3 text-[10px] font-bold uppercase tracking-wider text-destructive hover:text-destructive hover:bg-destructive/5 rounded-full"
-              onClick={handleClearAll}
+              onClick={onImagesClear}
             >
               <Trash2 className="h-3.5 w-3.5 mr-1.5" />
               Clear All
@@ -127,6 +143,16 @@ export function ImageUploader({
                       : "bg-background border-border/50 hover:border-primary/20 hover:bg-muted/30"
                   }`}
                   onClick={() => onImageSelect(image.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onImageSelect(image.id);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={selectedId === image.id}
+                  aria-label={`Edit ${image.metadata.name}`}
                 >
                   <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-muted flex-shrink-0 border border-border/50">
                     {image.originalUrl ? (
@@ -158,7 +184,8 @@ export function ImageUploader({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 flex-shrink-0 opacity-0 group-hover:opacity-100 hover:bg-destructive/10 rounded-full transition-all"
+                    className="h-8 w-8 flex-shrink-0 opacity-100 hover:bg-destructive/10 rounded-full transition-all sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
+                    aria-label={`Remove ${image.metadata.name}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       onImageRemove(image.id);

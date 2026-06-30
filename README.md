@@ -1,36 +1,32 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AuraEdit
 
-## Getting Started
+AuraEdit is a privacy-first image editor that runs entirely in the browser. It resizes, converts, filters, rotates, flips, and batch-processes JPG, PNG, WebP, GIF, and BMP images without uploading files to a server.
 
-First, run the development server:
+## Local development
+
+Requirements: Node.js 20.9 or newer.
 
 ```bash
+npm ci
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Quality checks
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npm audit
+```
 
-## Learn More
+## Production notes
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `npm run build` creates a static export in `dist/`.
+- Image files are limited to approved raster MIME types, 25 MB per file, 50 images per session, 8192 px per side, and 64 megapixels.
+- Exports are re-encoded with Canvas and do not retain EXIF metadata.
+- Heavy EXIF and ZIP libraries are loaded only when those workflows need them.
+- Security headers are included for Vercel (`vercel.json`) and `_headers`-compatible static hosts (`public/_headers`).

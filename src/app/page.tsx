@@ -26,8 +26,13 @@ import { ImageUploader } from '@/components/image-modifier/image-uploader';
 import { ImageSettingsPanel } from '@/components/image-modifier/image-settings-panel';
 import { ImagePreview } from '@/components/image-modifier/image-preview';
 import { BatchProcessor } from '@/components/image-modifier/batch-processor';
-import { createProcessedImage, processImage } from '@/lib/image-processing';
-import type { ProcessedImage, ImageSettings } from '@/types/image';
+import {
+  createProcessedImage,
+  processImage,
+  sanitizeBaseName,
+  validateImageFile,
+} from '@/lib/image-processing';
+import { MAX_IMAGE_COUNT, type ProcessedImage, type ImageSettings } from '@/types/image';
 
 // Error boundary component for the whole app
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
@@ -64,81 +69,93 @@ function ImageModifierApp() {
   const [processedBlob, setProcessedBlob] = useState<Blob | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeTab, setActiveTab] = useState('modify');
-  const [aspectRatio] = useState<number | null>(null);
   const [showFeaturesDialog, setShowFeaturesDialog] = useState(false);
   const [showPrivacyDialog, setShowPrivacyDialog] = useState(false);
   const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const imageUrlsRef = useRef<Map<string, string>>(new Map());
 
-  useEffect(() => {
-    setMounted(true);
+  const selectedImage = images.find((img) => img.id === selectedId) || null;
+  const openFilePicker = useCallback(() => {
+    document.getElementById('file-input')?.click();
   }, []);
 
-  const selectedImage = images.find((img) => img.id === selectedId) || null;
-
-  const handleImagesAdd = useCallback(async (files: FileList) => {
-    const imageFiles = Array.from(files).filter((file) => file.type.startsWith('image/'));
-
-    if (imageFiles.length === 0) {
-      toast.error('Please choose valid image files');
+  const handleImagesAdd = useCallback(async (files: FileList | File[]) => {
+    const availableSlots = Math.max(0, MAX_IMAGE_COUNT - images.length);
+    if (availableSlots === 0) {
+      toast.error(`You can work with up to ${MAX_IMAGE_COUNT} images at a time.`);
       return;
     }
 
-    const maxFileSize = 25 * 1024 * 1024;
-    const oversizedFiles = imageFiles.filter((file) => file.size > maxFileSize);
-    const validFiles = imageFiles.filter((file) => file.size <= maxFileSize);
+    const candidates = Array.from(files).slice(0, availableSlots);
+    const newImages: ProcessedImage[] = [];
+    const validationErrors: string[] = [];
 
-    if (oversizedFiles.length > 0) {
-      toast.error(`${oversizedFiles.length} image(s) exceeded the 25MB limit and were skipped`);
-    }
-
-    if (validFiles.length === 0) return;
-
-    const results = await Promise.allSettled(validFiles.map((file) => createProcessedImage(file)));
-    const newImages = results
-      .filter((result): result is PromiseFulfilledResult<ProcessedImage> => result.status === 'fulfilled')
-      .map((result) => result.value);
-    const failedCount = results.length - newImages.length;
-
-    if (failedCount > 0) {
-      toast.error(`${failedCount} image(s) could not be loaded and were skipped`);
-    }
-
-    if (newImages.length === 0) return;
-
-    newImages.forEach((image) => {
-      imageUrlsRef.current.set(image.id, image.originalUrl);
-    });
-
-    setImages((prev) => [...prev, ...newImages]);
-    setSelectedId((current) => current ?? newImages[0].id);
-    toast.success(`Added ${newImages.length} image(s)`);
-  }, []);
-
-  const handleImageRemove = useCallback((id: string) => {
-    setImages((prev) => {
-      const imageIndex = prev.findIndex((image) => image.id === id);
-      if (imageIndex === -1) return prev;
-
-      const image = prev[imageIndex];
-      if (image.originalUrl) {
-        URL.revokeObjectURL(image.originalUrl);
-        imageUrlsRef.current.delete(id);
+    for (const file of candidates) {
+      const validationError = validateImageFile(file);
+      if (validationError) {
+        validationErrors.push(validationError);
+        continue;
       }
 
-      const remainingImages = prev.filter((item) => item.id !== id);
-      setSelectedId((current) => {
-        if (current !== id) return current;
-        return remainingImages[imageIndex]?.id ?? remainingImages[imageIndex - 1]?.id ?? null;
+      try {
+        const processedImage = await createProcessedImage(file);
+        imageUrlsRef.current.set(processedImage.id, processedImage.originalUrl);
+        newImages.push(processedImage);
+      } catch (error) {
+        validationErrors.push(
+          error instanceof Error ? error.message : `Could not read ${file.name}.`
+        );
+      }
+    }
+
+    if (newImages.length > 0) {
+      setImages((prev) => [...prev, ...newImages]);
+      setSelectedId((current) => current ?? newImages[0].id);
+      toast.success(
+        `${newImages.length} image${newImages.length === 1 ? '' : 's'} ready to edit`
+      );
+    }
+
+    if (files.length > candidates.length) {
+      validationErrors.push(
+        `Only the first ${availableSlots} image${availableSlots === 1 ? '' : 's'} were added (limit ${MAX_IMAGE_COUNT}).`
+      );
+    }
+
+    if (validationErrors.length > 0) {
+      toast.error(validationErrors[0], {
+        description:
+          validationErrors.length > 1
+            ? `${validationErrors.length - 1} more file${validationErrors.length === 2 ? '' : 's'} were skipped.`
+            : undefined,
       });
+    }
+  }, [images.length]);
 
-      return remainingImages;
+  const handleImageRemove = useCallback((id: string) => {
+    const nextSelectedId = images.find((image) => image.id !== id)?.id ?? null;
+    setImages((prev) => {
+      const img = prev.find(i => i.id === id);
+      if (img?.originalUrl) {
+        URL.revokeObjectURL(img.originalUrl);
+        imageUrlsRef.current.delete(id);
+      }
+      return prev.filter((i) => i.id !== id);
     });
+    if (selectedId === id) {
+      setSelectedId(nextSelectedId);
+      setProcessedBlob(null);
+    }
+  }, [images, selectedId]);
 
-    setProcessedBlob((current) => (selectedId === id ? null : current));
-  }, [selectedId]);
+  const handleImagesClear = useCallback(() => {
+    imageUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    imageUrlsRef.current.clear();
+    setImages([]);
+    setSelectedId(null);
+    setProcessedBlob(null);
+  }, []);
 
   const handleSettingsChange = useCallback((settings: ImageSettings) => {
     if (!selectedId) return;
@@ -166,7 +183,7 @@ function ImageModifierApp() {
     const url = URL.createObjectURL(processedBlob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `processed_${selectedImage.metadata.name.split('.')[0]}.${selectedImage.settings.format}`;
+    a.download = `${sanitizeBaseName(selectedImage.metadata.name)}-edited.${selectedImage.settings.format}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -175,18 +192,9 @@ function ImageModifierApp() {
     toast.success('Image downloaded successfully');
   }, [processedBlob, selectedImage]);
 
-  const handleUndo = useCallback(() => {
-    // History implementation would go here
-  }, []);
-
-  const handleRedo = useCallback(() => {
-    // History implementation would go here
-  }, []);
-
   // Process selected image whenever settings change
   useEffect(() => {
     if (!selectedImage) {
-      setProcessedBlob(null);
       return;
     }
 
@@ -201,7 +209,7 @@ function ImageModifierApp() {
 
       setIsProcessing(true);
       try {
-        const blob = await processImage(selectedImage, aspectRatio, currentController.signal);
+        const blob = await processImage(selectedImage, null, currentController.signal);
         if (!currentController.signal.aborted) {
           setProcessedBlob(blob);
         }
@@ -209,6 +217,10 @@ function ImageModifierApp() {
         if ((error as Error).message !== 'Processing aborted' && !currentController.signal.aborted) {
           console.error('Failed to process image:', error);
           setProcessedBlob(null);
+          toast.error('This image could not be processed', {
+            id: 'processing-error',
+            description: error instanceof Error ? error.message : 'Try a smaller output size.',
+          });
         }
       } finally {
         if (!currentController.signal.aborted) {
@@ -225,23 +237,17 @@ function ImageModifierApp() {
         abortControllerRef.current.abort();
       }
     };
-  }, [selectedImage, aspectRatio]);
+  }, [selectedImage]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isCtrl = e.ctrlKey || e.metaKey;
-      
-      if (isCtrl && e.key === 'z' && !e.shiftKey) {
-        e.preventDefault();
-        handleUndo();
-      } else if (isCtrl && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) {
-        e.preventDefault();
-        handleRedo();
-      } else if (isCtrl && e.key === 's') {
+
+      if (isCtrl && e.key.toLowerCase() === 's' && processedBlob) {
         e.preventDefault();
         handleDownload();
-      } else if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedId && document.activeElement?.tagName !== 'INPUT') {
+      } else if (e.key === 'Delete') {
+        if (selectedId && document.activeElement === document.body) {
           e.preventDefault();
           handleImageRemove(selectedId);
         }
@@ -249,7 +255,14 @@ function ImageModifierApp() {
     };
 
     const handlePaste = async (e: ClipboardEvent) => {
-      if (document.activeElement?.tagName === 'INPUT') return;
+      const activeElement = document.activeElement;
+      if (
+        activeElement instanceof HTMLElement &&
+        (['INPUT', 'TEXTAREA', 'SELECT'].includes(activeElement.tagName) ||
+          activeElement.isContentEditable)
+      ) {
+        return;
+      }
       
       const items = e.clipboardData?.items;
       if (items) {
@@ -264,7 +277,6 @@ function ImageModifierApp() {
           const dataTransfer = new DataTransfer();
           files.forEach(f => dataTransfer.items.add(f));
           await handleImagesAdd(dataTransfer.files);
-          toast.success('Image pasted from clipboard');
         }
       }
     };
@@ -276,12 +288,11 @@ function ImageModifierApp() {
       window.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('paste', handlePaste);
     };
-  }, [handleUndo, handleRedo, handleDownload, handleImageRemove, handleImagesAdd, selectedId]);
+  }, [handleDownload, handleImageRemove, handleImagesAdd, processedBlob, selectedId]);
 
   // Revoke all remaining blob URLs only when the component unmounts
   useEffect(() => {
     const trackedUrls = imageUrlsRef.current;
-
     return () => {
       trackedUrls.forEach((url) => URL.revokeObjectURL(url));
       trackedUrls.clear();
@@ -299,7 +310,7 @@ function ImageModifierApp() {
         transition={{ duration: 0.5, ease: "easeOut" }}
         className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-md"
       >
-        <div className="max-w-full mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="mx-auto flex w-full max-w-[1600px] items-center justify-between px-4 py-3.5 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
             <Logo size={32} className="text-primary" />
             <div>
@@ -328,26 +339,24 @@ function ImageModifierApp() {
                 size="icon" 
                 className="h-9 w-9 rounded-full"
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                aria-label="Toggle color theme"
               >
-                {mounted ? (
-                  theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />
-                ) : (
-                  <Sun className="h-4 w-4" />
-                )}
+                <Sun className="hidden h-4 w-4 dark:block" aria-hidden="true" />
+                <Moon className="block h-4 w-4 dark:hidden" aria-hidden="true" />
               </Button>
             </div>
           </div>
         </div>
       </motion.header>
 
-      <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-8 items-start">
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[296px_minmax(0,1fr)] lg:gap-6">
           {/* Sidebar */}
           <motion.div 
             initial={{ x: -20, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             transition={{ duration: 0.5, ease: "easeOut", delay: 0.1 }}
-            className="flex flex-col gap-8 sticky top-24"
+            className="flex flex-col gap-4 lg:sticky lg:top-24"
           >
             <Card className="shadow-sm border-border/50 overflow-hidden">
               <CardHeader className="pb-4">
@@ -366,11 +375,12 @@ function ImageModifierApp() {
                   onImagesAdd={handleImagesAdd}
                   onImageSelect={setSelectedId}
                   onImageRemove={handleImageRemove}
+                  onImagesClear={handleImagesClear}
                 />
               </CardContent>
             </Card>
 
-            <Card className="shadow-sm border-border/50">
+            <Card className="hidden border-border/50 shadow-sm lg:flex">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-bold flex items-center gap-2">
                   <Sparkles className="h-3.5 w-3.5 text-primary" />
@@ -378,7 +388,7 @@ function ImageModifierApp() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <ol className="space-y-4 text-xs font-medium text-muted-foreground list-none p-0">
+                <ol className="list-none space-y-3 p-0 text-xs font-medium text-muted-foreground">
                   <li className="flex gap-3">
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-[10px]">1</span>
                     Upload your image(s)
@@ -404,7 +414,8 @@ function ImageModifierApp() {
             className="min-w-0"
           >
             <Tabs defaultValue="modify" className="w-full" onValueChange={setActiveTab}>
-              <TabsList className="mb-6">
+              <div className="mb-5 flex flex-col gap-3 border-b border-border/70 sm:flex-row sm:items-end sm:justify-between">
+                <TabsList className="border-0">
                 <TabsTrigger value="modify" className="gap-2">
                   <ImageIcon className="h-4 w-4" />
                   Modify Images
@@ -413,7 +424,12 @@ function ImageModifierApp() {
                   <Layers className="h-4 w-4" />
                   Batch Process
                 </TabsTrigger>
-              </TabsList>
+                </TabsList>
+                <div className="hidden items-center gap-2 whitespace-nowrap pb-3 text-xs font-medium text-muted-foreground sm:flex">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.12)]" />
+                  Local processing
+                </div>
+              </div>
               
               <AnimatePresence mode="wait">
                 <motion.div
@@ -424,8 +440,8 @@ function ImageModifierApp() {
                   transition={{ duration: 0.3 }}
                 >
                   <TabsContent value="modify" className="mt-0">
-                    <div className="grid grid-cols-1 xl:grid-cols-[1fr_350px] gap-8">
-                      <div className="space-y-8">
+                    <div className={`grid grid-cols-1 gap-5 ${selectedImage ? 'xl:grid-cols-[minmax(0,1fr)_340px]' : ''}`}>
+                      <div className="min-w-0">
                         <ImagePreview
                           image={selectedImage}
                           processedBlob={processedBlob}
@@ -433,27 +449,29 @@ function ImageModifierApp() {
                           onDownload={handleDownload}
                         />
                       </div>
-                      <div className="space-y-8">
+                      {selectedImage && <div className="min-w-0">
                         <ImageSettingsPanel
+                          key={selectedImage.id}
                           image={selectedImage}
                           onSettingsChange={handleSettingsChange}
                           onApplyToAll={handleApplyToAll}
                           hasMultipleImages={images.length > 1}
                         />
-                      </div>
+                      </div>}
                     </div>
                   </TabsContent>
 
                   <TabsContent value="batch" className="mt-0">
                     <BatchProcessor 
                       images={images} 
-                      globalSettings={images[0]?.settings || {
+                      globalSettings={selectedImage?.settings || images[0]?.settings || {
                         format: 'webp',
                         quality: 80,
                         width: 1920,
                         height: 1080,
                         maintainAspectRatio: true,
-                        preserveMetadata: true,
+                        preserveMetadata: false,
+                        dpi: 72,
                         rotation: 0,
                         flipHorizontal: false,
                         flipVertical: false,
@@ -467,7 +485,8 @@ function ImageModifierApp() {
                           hueRotate: 0,
                         },
                       }}
-                      aspectRatio={aspectRatio}
+                      aspectRatio={null}
+                      onRequestUpload={openFilePicker}
                     />
                   </TabsContent>
                 </motion.div>
@@ -477,53 +496,27 @@ function ImageModifierApp() {
         </div>
       </div>
 
-      {/* Footer */}
-      <motion.footer 
-        initial={{ opacity: 0 }}
-        whileInView={{ opacity: 1 }}
-        transition={{ duration: 1 }}
-        viewport={{ once: true }}
-        className="w-full border-t border-border/50 bg-muted/20 mt-16"
-      >
-        <div className="max-w-full mx-auto px-6 py-12">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 mb-12">
-            {[
-              { icon: Zap, title: "Fast Processing", desc: "Optimized algorithms for blazing fast results" },
-              { icon: Lock, title: "Private & Secure", desc: "Your images never leave your device" },
-              { icon: FileImage, title: "Multiple Formats", desc: "Supports all popular image formats" },
-              { icon: Layers, title: "Batch Processing", desc: "Process multiple images at once" },
-              { icon: Sparkles, title: "High Quality", desc: "Maintain quality while optimizing" }
-            ].map((feature, i) => (
-              <motion.div 
-                key={i} 
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: i * 0.1 }}
-                viewport={{ once: true }}
-                className="flex flex-col items-center text-center space-y-3 p-4 rounded-2xl bg-background/50 border border-border/50 shadow-sm hover:shadow-md hover:border-primary/20 transition-all group"
-              >
-                <div className="h-12 w-12 flex items-center justify-center rounded-2xl bg-primary/5 ring-1 ring-primary/10 group-hover:bg-primary/10 transition-colors">
-                  <feature.icon className="h-6 w-6 text-primary" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-sm text-foreground">{feature.title}</h3>
-                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{feature.desc}</p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-6 pt-8 border-t border-border/50">
-            <p className="text-xs font-medium text-muted-foreground italic">
-              © {new Date().getFullYear()} AuraEdit. Open source project.
-            </p>
-            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground px-4 py-2 bg-background/50 rounded-full border border-border/50">
+      <footer className="mt-5 w-full border-t border-border/60 bg-muted/15">
+        <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-4 py-6 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-3 text-xs font-medium text-muted-foreground">
+            <span className="flex items-center gap-2">
               <Shield className="h-3.5 w-3.5 text-primary" />
-              <span>Your images never leave your device</span>
-            </div>
+              Files stay on this device
+            </span>
+            <span className="flex items-center gap-2">
+              <Zap className="h-3.5 w-3.5 text-primary" />
+              No upload wait
+            </span>
+            <span className="flex items-center gap-2">
+              <FileImage className="h-3.5 w-3.5 text-primary" />
+              Metadata removed on export
+            </span>
           </div>
+          <p className="text-xs text-muted-foreground">
+            © {new Date().getFullYear()} AuraEdit
+          </p>
         </div>
-      </motion.footer>
+      </footer>
 
       <Dialog open={showFeaturesDialog} onOpenChange={setShowFeaturesDialog}>
         <DialogContent className="max-w-lg">
@@ -630,8 +623,8 @@ function ImageModifierApp() {
                 <FileImage className="h-4 w-4 text-primary" />
               </div>
               <div>
-                <h4 className="text-sm font-medium">EXIF Control</h4>
-                <p className="text-xs text-muted-foreground mt-0.5">You decide whether to keep or remove metadata like GPS location and camera info from your images.</p>
+                <h4 className="text-sm font-medium">Export-safe metadata</h4>
+                <p className="text-xs text-muted-foreground mt-0.5">Exports are re-encoded without EXIF data, including camera details and GPS coordinates.</p>
               </div>
             </div>
           </div>

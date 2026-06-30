@@ -142,4 +142,16 @@ export const COMMON_RESOLUTIONS = [
   { name: 'Twitter Header (1500×500)', width: 1500, height: 500 },
   { name: 'YouTube Thumbnail (1280×720)', width: 1280, height: 720 },
 ];
-export const MAX_IMAGE_DIMENSION = 16384;
+// Keep browser-side canvas work inside a predictable memory envelope.
+// 8K output still fits, while pathological dimensions are rejected early.
+export const MAX_IMAGE_DIMENSION = 8192;
+export const MAX_IMAGE_PIXELS = 64_000_000;
+export const MAX_IMAGE_FILE_SIZE = 25 * 1024 * 1024;
+export const MAX_IMAGE_COUNT = 50;
+export const SUPPORTED_IMAGE_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/bmp',
+] as const;
