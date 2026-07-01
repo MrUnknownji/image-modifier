@@ -50,6 +50,33 @@ export function sanitizeBaseName(filename: string): string {
   return sanitized || 'image';
 }
 
+export function canPreserveJpegMetadata(
+  sourceMimeType: string,
+  outputFormat: ImageSettings['format']
+): boolean {
+  return sourceMimeType === 'image/jpeg' && outputFormat === 'jpeg';
+}
+
+async function copyJpegMetadata(
+  originalFile: File,
+  processedBlob: Blob,
+  outputName: string
+): Promise<File> {
+  const { default: imageCompression } = await import('browser-image-compression');
+  const copyExifWithoutOrientation = (
+    imageCompression as typeof imageCompression & {
+      copyExifWithoutOrientation: (source: File, target: File) => Promise<File>;
+    }
+  ).copyExifWithoutOrientation;
+
+  const processedFile = new File([processedBlob], outputName, {
+    type: 'image/jpeg',
+    lastModified: Date.now(),
+  });
+
+  return copyExifWithoutOrientation(originalFile, processedFile);
+}
+
 export async function getImageDimensions(file: File): Promise<ImageDimensions> {
   if (typeof createImageBitmap !== 'undefined') {
     try {
@@ -313,14 +340,38 @@ export async function processImage(
         const quality = settings.format === 'png' ? undefined : settings.quality / 100;
       
         canvas.toBlob(
-          (blob) => {
+          async (blob) => {
             canvas.width = 1;
             canvas.height = 1;
 
             if (signal?.aborted) {
               reject(new Error('Processing aborted'));
             } else if (blob) {
-              resolve(blob);
+              if (
+                settings.preserveMetadata &&
+                canPreserveJpegMetadata(originalFile.type, settings.format)
+              ) {
+                try {
+                  const outputWithMetadata = await copyJpegMetadata(
+                    originalFile,
+                    blob,
+                    `${sanitizeBaseName(image.metadata.name)}-edited.jpeg`
+                  );
+                  if (signal?.aborted) {
+                    reject(new Error('Processing aborted'));
+                  } else {
+                    resolve(outputWithMetadata);
+                  }
+                } catch {
+                  reject(
+                    new Error(
+                      'The image was processed, but its JPEG metadata could not be preserved. Turn off metadata preservation and try again.'
+                    )
+                  );
+                }
+              } else {
+                resolve(blob);
+              }
             } else {
               reject(new Error('Failed to create blob'));
             }

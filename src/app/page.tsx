@@ -65,6 +65,7 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
 
 function ImageModifierApp() {
   const [images, setImages] = useState<ProcessedImage[]>([]);
+  const [batchSelectedIds, setBatchSelectedIds] = useState<string[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [processedBlob, setProcessedBlob] = useState<Blob | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -111,6 +112,9 @@ function ImageModifierApp() {
 
     if (newImages.length > 0) {
       setImages((prev) => [...prev, ...newImages]);
+      setBatchSelectedIds((prev) => [
+        ...new Set([...prev, ...newImages.map((image) => image.id)]),
+      ]);
       setSelectedId((current) => current ?? newImages[0].id);
       toast.success(
         `${newImages.length} image${newImages.length === 1 ? '' : 's'} ready to edit`
@@ -147,12 +151,14 @@ function ImageModifierApp() {
       setSelectedId(nextSelectedId);
       setProcessedBlob(null);
     }
+    setBatchSelectedIds((prev) => prev.filter((imageId) => imageId !== id));
   }, [images, selectedId]);
 
   const handleImagesClear = useCallback(() => {
     imageUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
     imageUrlsRef.current.clear();
     setImages([]);
+    setBatchSelectedIds([]);
     setSelectedId(null);
     setProcessedBlob(null);
   }, []);
@@ -166,16 +172,43 @@ function ImageModifierApp() {
     );
   }, [selectedId]);
 
-  const handleApplyToAll = useCallback(() => {
+  const handleApplySettings = useCallback((scope: 'chosen' | 'all') => {
     if (!selectedImage) return;
+    const chosenIds = new Set(batchSelectedIds);
+    const affectedCount =
+      scope === 'all'
+        ? images.length
+        : images.filter((image) => chosenIds.has(image.id)).length;
+
+    if (affectedCount === 0) {
+      toast.error('Choose at least one batch image first.');
+      return;
+    }
+
     setImages((prev) =>
-      prev.map((img) => ({
-        ...img,
-        settings: { ...selectedImage.settings },
-      }))
+      prev.map((img) => {
+        const shouldApply = scope === 'all' || chosenIds.has(img.id);
+        return shouldApply
+          ? {
+              ...img,
+              settings: {
+                ...selectedImage.settings,
+                filters: { ...selectedImage.settings.filters },
+              },
+            }
+          : img;
+      })
     );
-    toast.success('Settings applied to all images');
-  }, [selectedImage]);
+    toast.success(
+      `Settings copied to ${affectedCount} image${affectedCount === 1 ? '' : 's'}`,
+      {
+        description:
+          scope === 'all'
+            ? 'The entire batch now uses the current image settings.'
+            : 'Only your chosen batch images were updated.',
+      }
+    );
+  }, [batchSelectedIds, images, selectedImage]);
 
   const handleDownload = useCallback(async () => {
     if (!processedBlob || !selectedImage) return;
@@ -454,8 +487,10 @@ function ImageModifierApp() {
                           key={selectedImage.id}
                           image={selectedImage}
                           onSettingsChange={handleSettingsChange}
-                          onApplyToAll={handleApplyToAll}
+                          onApplySettings={handleApplySettings}
                           hasMultipleImages={images.length > 1}
+                          batchSelectedCount={batchSelectedIds.length}
+                          totalImages={images.length}
                         />
                       </div>}
                     </div>
@@ -487,6 +522,9 @@ function ImageModifierApp() {
                       }}
                       aspectRatio={null}
                       onRequestUpload={openFilePicker}
+                      activeImageId={selectedId}
+                      batchSelectedIds={batchSelectedIds}
+                      onBatchSelectionChange={setBatchSelectedIds}
                     />
                   </TabsContent>
                 </motion.div>
@@ -509,7 +547,7 @@ function ImageModifierApp() {
             </span>
             <span className="flex items-center gap-2">
               <FileImage className="h-3.5 w-3.5 text-primary" />
-              Metadata removed on export
+              You control export metadata
             </span>
           </div>
           <p className="text-xs text-muted-foreground">
@@ -623,8 +661,8 @@ function ImageModifierApp() {
                 <FileImage className="h-4 w-4 text-primary" />
               </div>
               <div>
-                <h4 className="text-sm font-medium">Export-safe metadata</h4>
-                <p className="text-xs text-muted-foreground mt-0.5">Exports are re-encoded without EXIF data, including camera details and GPS coordinates.</p>
+                <h4 className="text-sm font-medium">Metadata control</h4>
+                <p className="text-xs text-muted-foreground mt-0.5">Metadata removal is enabled by default. You can optionally preserve available EXIF for JPEG-to-JPEG exports.</p>
               </div>
             </div>
           </div>

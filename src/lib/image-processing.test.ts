@@ -11,7 +11,7 @@ const DEFAULT_SETTINGS: ImageSettings = {
   quality: 85,
   format: 'jpeg',
   dpi: 72,
-  preserveMetadata: true,
+  preserveMetadata: false,
   filters: {
     brightness: 100,
     contrast: 100,
@@ -360,7 +360,7 @@ describe('processImage', () => {
         quality: 85,
         format: 'jpeg',
         dpi: 72,
-        preserveMetadata: true,
+        preserveMetadata: false,
         filters: {
             brightness: 100,
             contrast: 100,

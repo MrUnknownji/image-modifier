@@ -27,6 +27,6 @@ npm audit
 
 - `npm run build` creates a static export in `dist/`.
 - Image files are limited to approved raster MIME types, 25 MB per file, 50 images per session, 8192 px per side, and 64 megapixels.
-- Exports are re-encoded with Canvas and do not retain EXIF metadata.
+- Metadata removal is enabled by default. Available EXIF can optionally be preserved for JPEG-to-JPEG exports.
 - Heavy EXIF and ZIP libraries are loaded only when those workflows need them.
 - Security headers are included for Vercel (`vercel.json`) and `_headers`-compatible static hosts (`public/_headers`).

@@ -13,6 +13,10 @@ import {
   Zap,
   Upload,
   Shield,
+  MousePointer2,
+  ListChecks,
+  Users,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -24,6 +28,7 @@ import {
 } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import {
   Alert,
@@ -50,6 +55,9 @@ interface BatchProcessorProps {
   globalSettings: ImageSettings;
   aspectRatio: number | null;
   onRequestUpload: () => void;
+  activeImageId: string | null;
+  batchSelectedIds: string[];
+  onBatchSelectionChange: (ids: string[]) => void;
 }
 
 interface BatchProgress {
@@ -59,21 +67,39 @@ interface BatchProgress {
   currentFile: string;
 }
 
+type ProcessingScope = 'active' | 'chosen' | 'all';
+
 export function BatchProcessor({
   images,
   globalSettings,
   aspectRatio,
   onRequestUpload,
+  activeImageId,
+  batchSelectedIds,
+  onBatchSelectionChange,
 }: BatchProcessorProps) {
   const [progress, setProgress] = useState<BatchProgress | null>(null);
   const [processedCount, setProcessedCount] = useState(0);
   const [errors, setErrors] = useState<string[]>([]);
+  const [scope, setScope] = useState<ProcessingScope>('all');
+
+  const activeImage =
+    images.find((image) => image.id === activeImageId) ?? images[0] ?? null;
+  const chosenIdSet = new Set(batchSelectedIds);
+  const targetImages =
+    scope === 'active'
+      ? activeImage
+        ? [activeImage]
+        : []
+      : scope === 'chosen'
+        ? images.filter((image) => chosenIdSet.has(image.id))
+        : images;
 
   const processAllImages = async () => {
-    if (images.length === 0) return;
+    if (targetImages.length === 0) return;
 
     setProgress({
-      total: images.length,
+      total: targetImages.length,
       completed: 0,
       failed: 0,
       currentFile: '',
@@ -86,7 +112,7 @@ export function BatchProcessor({
     const limit = pLimit(3);
     const filenameCounts = new Map<string, number>();
 
-    const tasks = images.map((image) =>
+    const tasks = targetImages.map((image) =>
       limit(async () => {
         setProgress((prev) => {
           if (!prev) return prev;
@@ -187,7 +213,7 @@ export function BatchProcessor({
     );
   }
 
-  const totalSize = images.reduce((acc, img) => acc + img.metadata.size, 0);
+  const totalSize = targetImages.reduce((acc, img) => acc + img.metadata.size, 0);
   const progressPercent = progress ? ((progress.completed + progress.failed) / progress.total) * 100 : 0;
 
   return (
@@ -200,13 +226,13 @@ export function BatchProcessor({
               Batch Processing
             </CardTitle>
             <CardDescription className="text-xs">
-              Process all {images.length} images with current settings
+              Choose who gets the current image&apos;s settings, then process
             </CardDescription>
           </div>
           <div className="flex items-center gap-2 self-start sm:self-auto">
             <Badge variant="secondary" className="font-normal text-xs">
               <Images className="h-3 w-3 mr-1" />
-              {images.length}
+              {targetImages.length} of {images.length}
             </Badge>
             <Badge variant="outline" className="font-normal text-xs">
               {formatFileSize(totalSize)}
@@ -215,6 +241,130 @@ export function BatchProcessor({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="space-y-3 rounded-2xl border border-border/60 bg-muted/20 p-3">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="flex items-center gap-1.5 text-xs font-semibold">
+                <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
+                Apply these settings to
+              </p>
+              <p className="mt-0.5 text-[10px] text-muted-foreground">
+                Settings source: {activeImage?.metadata.name ?? 'Current image'}
+              </p>
+            </div>
+            <Badge variant="outline" className="self-start text-[10px] font-normal sm:self-auto">
+              {targetImages.length} target{targetImages.length === 1 ? '' : 's'}
+            </Badge>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-3">
+            {[
+              {
+                value: 'active' as const,
+                icon: MousePointer2,
+                title: 'Current image',
+                detail: activeImage ? '1 image' : 'None',
+              },
+              {
+                value: 'chosen' as const,
+                icon: ListChecks,
+                title: 'Chosen images',
+                detail: `${batchSelectedIds.length} selected`,
+              },
+              {
+                value: 'all' as const,
+                icon: Users,
+                title: 'Entire batch',
+                detail: `${images.length} images`,
+              },
+            ].map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setScope(option.value)}
+                aria-pressed={scope === option.value}
+                className={`flex items-center gap-2 rounded-xl border p-3 text-left transition-colors ${
+                  scope === option.value
+                    ? 'border-primary/50 bg-primary/10 text-foreground'
+                    : 'border-border/60 bg-background/60 text-muted-foreground hover:border-primary/30 hover:text-foreground'
+                }`}
+              >
+                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                  scope === option.value ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
+                }`}>
+                  <option.icon className="h-4 w-4" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-xs font-semibold">{option.title}</span>
+                  <span className="block text-[10px]">{option.detail}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {scope === 'chosen' && (
+            <div className="rounded-xl border border-border/60 bg-background/50 p-3">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <p className="text-[11px] font-semibold">Choose batch images</p>
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => onBatchSelectionChange(images.map((image) => image.id))}
+                  >
+                    Select all
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => onBatchSelectionChange([])}
+                  >
+                    Clear
+                  </Button>
+                </div>
+              </div>
+              <div className="grid max-h-48 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
+                {images.map((image) => {
+                  const checkboxId = `batch-${image.id}`;
+                  const isChosen = chosenIdSet.has(image.id);
+                  return (
+                    <label
+                      key={image.id}
+                      htmlFor={checkboxId}
+                      className={`flex cursor-pointer items-center gap-2 rounded-lg border p-2 transition-colors ${
+                        isChosen
+                          ? 'border-primary/35 bg-primary/[0.07]'
+                          : 'border-border/50 bg-muted/20'
+                      }`}
+                    >
+                      <Checkbox
+                        id={checkboxId}
+                        checked={isChosen}
+                        onCheckedChange={(checked) => {
+                          const next = new Set(batchSelectedIds);
+                          if (checked) next.add(image.id);
+                          else next.delete(image.id);
+                          onBatchSelectionChange([...next]);
+                        }}
+                      />
+                      <span className="min-w-0">
+                        <span className="block truncate text-[11px] font-medium text-foreground">
+                          {image.metadata.name}
+                        </span>
+                        <span className="block text-[9px] text-muted-foreground">
+                          {image.dimensions.width}×{image.dimensions.height}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="grid gap-2 sm:grid-cols-3">
           <div className="rounded-xl border border-border/60 bg-muted/25 p-3">
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Output</p>
@@ -233,7 +383,7 @@ export function BatchProcessor({
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Privacy</p>
             <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold">
               <Shield className="h-3.5 w-3.5 text-primary" />
-              Metadata removed
+              {globalSettings.preserveMetadata ? 'Preserve JPEG EXIF' : 'Metadata removed'}
             </p>
           </div>
         </div>
@@ -249,7 +399,7 @@ export function BatchProcessor({
                 </span>
               </div>
               <span className="font-medium text-xs tabular-nums flex-shrink-0">
-                {progress.completed} / {progress.total}
+                {progress.completed + progress.failed} / {progress.total}
               </span>
             </div>
             <Progress value={progressPercent} className="h-1.5" />
@@ -289,7 +439,7 @@ export function BatchProcessor({
         <div className="flex gap-2">
           <Button
             onClick={processAllImages}
-            disabled={!!progress}
+            disabled={!!progress || targetImages.length === 0}
             className="flex-1 gap-2"
             size="sm"
           >
@@ -298,10 +448,10 @@ export function BatchProcessor({
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Processing...
               </>
-            ) : images.length > 1 ? (
+            ) : targetImages.length > 1 ? (
               <>
                 <FileArchive className="h-4 w-4" />
-                Download All as ZIP
+                Process {targetImages.length} & Download ZIP
               </>
             ) : (
               <>
@@ -327,7 +477,11 @@ export function BatchProcessor({
         {/* Info */}
         <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
           <Zap className="h-3 w-3" />
-          <span>Settings will be applied to all {images.length} images</span>
+          <span>
+            {targetImages.length > 0
+              ? `Current settings will be used for ${targetImages.length} image${targetImages.length === 1 ? '' : 's'}`
+              : 'Choose at least one image to continue'}
+          </span>
         </div>
       </CardContent>
     </Card>

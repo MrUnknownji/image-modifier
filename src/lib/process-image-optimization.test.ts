@@ -119,7 +119,7 @@ describe('processImage optimization', () => {
       exif: null,
       settings: {
         width: 100, height: 100, maintainAspectRatio: true, quality: 85, format: 'jpeg',
-        dpi: 72, preserveMetadata: true, filters: {} as any, rotation: 0, flipHorizontal: false, flipVertical: false
+        dpi: 72, preserveMetadata: false, filters: {} as any, rotation: 0, flipHorizontal: false, flipVertical: false
       },
       history: [],
       historyIndex: 0
@@ -147,7 +147,7 @@ describe('processImage optimization', () => {
       exif: null,
       settings: {
         width: 100, height: 100, maintainAspectRatio: true, quality: 85, format: 'jpeg',
-        dpi: 72, preserveMetadata: true, filters: {} as any, rotation: 0, flipHorizontal: false, flipVertical: false
+        dpi: 72, preserveMetadata: false, filters: {} as any, rotation: 0, flipHorizontal: false, flipVertical: false
       },
       history: [],
       historyIndex: 0

@@ -18,6 +18,11 @@ import {
   FlipVertical,
   ShieldCheck,
   MapPin,
+  ChevronDown,
+  Check,
+  ListChecks,
+  Users,
+  AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,10 +42,13 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { calculateDimensionUpdate } from '@/lib/image-processing';
 import {
   COMMON_ASPECT_RATIOS,
@@ -55,8 +63,10 @@ import {
 interface ImageSettingsPanelProps {
   image: ProcessedImage | null;
   onSettingsChange: (settings: ImageSettings) => void;
-  onApplyToAll: () => void;
+  onApplySettings: (scope: 'chosen' | 'all') => void;
   hasMultipleImages: boolean;
+  batchSelectedCount: number;
+  totalImages: number;
 }
 
 const DEFAULT_SETTINGS: ImageSettings = {
@@ -155,8 +165,10 @@ function FilterSlider({ label, value, defaultValue, min, max, step = 1, unit = '
 export function ImageSettingsPanel({
   image,
   onSettingsChange,
-  onApplyToAll,
+  onApplySettings,
   hasMultipleImages,
+  batchSelectedCount,
+  totalImages,
 }: ImageSettingsPanelProps) {
   const [aspectRatio, setAspectRatio] = useState<number | null>(null);
   const [lockRatio, setLockRatio] = useState(true);
@@ -270,6 +282,8 @@ export function ImageSettingsPanel({
   };
 
   const hasGPS = image?.exif?.GPSLatitude && image?.exif?.GPSLongitude;
+  const canPreserveMetadata =
+    image?.originalFile.type === 'image/jpeg' && settings.format === 'jpeg';
 
   if (!image) {
     return (
@@ -294,15 +308,47 @@ export function ImageSettingsPanel({
             Image Settings
           </CardTitle>
           {hasMultipleImages && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="sm" onClick={onApplyToAll} className="h-7 gap-1 text-xs">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 gap-1.5 px-2.5 text-xs">
                   <Copy className="h-3 w-3" />
-                  Apply to All
+                  Copy settings
+                  <ChevronDown className="h-3 w-3" />
                 </Button>
-              </TooltipTrigger>
-              <TooltipContent>Apply current settings to all images</TooltipContent>
-            </Tooltip>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuLabel className="text-xs">
+                  Apply current settings to…
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem disabled className="text-xs">
+                  <Check className="text-primary" />
+                  Current image only
+                  <span className="ml-auto text-[10px] text-muted-foreground">Active</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={batchSelectedCount === 0}
+                  onSelect={() => onApplySettings('chosen')}
+                  className="text-xs"
+                >
+                  <ListChecks />
+                  Chosen images
+                  <span className="ml-auto text-[10px] text-muted-foreground">
+                    {batchSelectedCount}
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => onApplySettings('all')}
+                  className="text-xs"
+                >
+                  <Users />
+                  Entire batch
+                  <span className="ml-auto text-[10px] text-muted-foreground">
+                    {totalImages}
+                  </span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       </CardHeader>
@@ -661,21 +707,60 @@ export function ImageSettingsPanel({
           </TabsContent>
 
           <TabsContent value="metadata" className="space-y-3 mt-2 w-full max-w-full">
-            <Alert className="border-emerald-500/30 bg-emerald-500/10">
-              <ShieldCheck className="h-4 w-4 text-emerald-600" />
-              <AlertDescription className="text-xs leading-relaxed text-emerald-700 dark:text-emerald-300">
-                <span className="font-semibold">Privacy-safe export</span>
-                <br />
-                AuraEdit re-encodes every output without EXIF metadata, including GPS and camera details.
-              </AlertDescription>
-            </Alert>
-
             <div className="space-y-3">
-              {hasGPS && (
+              <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    id="remove-metadata"
+                    checked={!settings.preserveMetadata}
+                    onCheckedChange={(checked) =>
+                      updateSettings({ preserveMetadata: !(checked as boolean) })
+                    }
+                    className="mt-0.5"
+                  />
+                  <div className="space-y-1">
+                    <Label htmlFor="remove-metadata" className="cursor-pointer text-xs font-semibold">
+                      Remove metadata from export
+                    </Label>
+                    <p className="text-[10px] leading-relaxed text-muted-foreground">
+                      Recommended for privacy. Removes camera details, dates, copyright, and GPS data.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {!settings.preserveMetadata && (
+                <Alert className="border-emerald-500/30 bg-emerald-500/10">
+                  <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                  <AlertDescription className="text-xs leading-relaxed text-emerald-700 dark:text-emerald-300">
+                    Metadata will be removed from this export.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {settings.preserveMetadata && canPreserveMetadata && (
+                <Alert className="border-sky-500/30 bg-sky-500/10">
+                  <FileImage className="h-4 w-4 text-sky-600" />
+                  <AlertDescription className="text-xs leading-relaxed text-sky-700 dark:text-sky-300">
+                    Available JPEG EXIF will be copied to the export. Orientation is excluded so the edited image displays correctly.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {settings.preserveMetadata && !canPreserveMetadata && (
+                <Alert className="border-amber-500/30 bg-amber-500/10">
+                  <AlertTriangle className="h-4 w-4 text-amber-500" />
+                  <AlertDescription className="text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+                    Metadata preservation works for JPEG → JPEG exports. With the current format, metadata will be removed.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {hasGPS && settings.preserveMetadata && canPreserveMetadata && (
                 <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
                   <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
                   <p className="text-xs leading-relaxed text-amber-700 dark:text-amber-300">
-                    Location data exists in the original file. It will not be included in the export.
+                    GPS location data is present and will remain in this JPEG export.
                   </p>
                 </div>
               )}

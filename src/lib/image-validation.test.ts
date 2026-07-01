@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import {
+  canPreserveJpegMetadata,
   sanitizeBaseName,
   validateImageFile,
 } from './image-processing';
@@ -36,5 +37,11 @@ describe('image input hardening', () => {
 
   it('uses a safe fallback for empty filenames', () => {
     assert.strictEqual(sanitizeBaseName('...jpg'), 'image');
+  });
+
+  it('preserves metadata only for JPEG to JPEG processing', () => {
+    assert.strictEqual(canPreserveJpegMetadata('image/jpeg', 'jpeg'), true);
+    assert.strictEqual(canPreserveJpegMetadata('image/png', 'jpeg'), false);
+    assert.strictEqual(canPreserveJpegMetadata('image/jpeg', 'webp'), false);
   });
 });
